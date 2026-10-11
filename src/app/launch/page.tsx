@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { DAY1_FAMILIES } from "@/lib/cluster";
+import { useWallet } from "@solana/wallet-adapter-react";
 
 type Quote = {
   launchFeeSol: number;
@@ -9,20 +10,30 @@ type Quote = {
   networkRentSol: number;
   totalSol: number;
   cluster: string;
+  authority?: string;
+  authority_sol?: number;
 };
 
 export default function LaunchPage() {
+  const { publicKey } = useWallet();
   const [family, setFamily] = useState("claude");
   const [quote, setQuote] = useState<Quote | null>(null);
   const [fund, setFund] = useState("");
-  const [result, setResult] = useState<string>("");
+  const [result, setResult] = useState("");
   const [busy, setBusy] = useState(false);
+  const [log, setLog] = useState<string[]>([]);
+
+  function push(s: string) {
+    setLog((L) => [s, ...L].slice(0, 12));
+  }
+
+  async function refreshQuote() {
+    const q = await fetch("/api/launch").then((r) => r.json());
+    setQuote(q);
+  }
 
   useEffect(() => {
-    fetch("/api/launch")
-      .then((r) => r.json())
-      .then(setQuote)
-      .catch(() => {});
+    refreshQuote().catch(() => {});
   }, []);
 
   async function create() {
@@ -37,6 +48,25 @@ export default function LaunchPage() {
       const j = await r.json();
       setFund(j.fund_address || "");
       setResult(JSON.stringify(j, null, 2));
+      push(`created ${j.fund_address?.slice(0, 8)}…`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function fundFromAuthority() {
+    if (!fund) return;
+    setBusy(true);
+    try {
+      const r = await fetch("/api/launch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "fund_from_authority", fund_address: fund }),
+      });
+      const j = await r.json();
+      setResult(JSON.stringify(j, null, 2));
+      push(j.ok ? `funded ${String(j.signature).slice(0, 16)}…` : `err ${j.error}`);
+      await refreshQuote();
     } finally {
       setBusy(false);
     }
@@ -53,6 +83,7 @@ export default function LaunchPage() {
       });
       const j = await r.json();
       setResult(JSON.stringify(j, null, 2));
+      push(j.ok ? `launched ${j.mint}` : `err ${j.error}`);
     } finally {
       setBusy(false);
     }
@@ -64,10 +95,22 @@ export default function LaunchPage() {
         <p className="kicker">launch</p>
         <h2 className="text-xl font-bold">Launch a model token_</h2>
         <p className="mt-2 text-sm text-claw-muted max-w-2xl">
-          One token per model family. We create a dev wallet, you fund it, we launch on pump.fun and claim creator
-          rewards for your stakers. Devnet/testnet first — same fee math as mainnet.
+          One token per family. Dev wallet → fund {quote?.totalSol?.toFixed(3) ?? "0.580"} SOL → pump. Connected:{" "}
+          {publicKey ? publicKey.toBase58().slice(0, 8) + "…" : "none — use Connect top-right"}.
         </p>
       </div>
+
+      {quote?.authority && (
+        <div className="panel p-3 text-xs flex flex-wrap gap-4">
+          <span>
+            authority <span className="text-claw-cyan">{quote.authority.slice(0, 6)}…{quote.authority.slice(-4)}</span>
+          </span>
+          <span>
+            bal <span className="text-claw-ok">{quote.authority_sol?.toFixed(4)} SOL</span>
+          </span>
+          <span className="text-claw-muted">cluster {quote.cluster}</span>
+        </div>
+      )}
 
       <section className="panel p-4">
         <p className="kicker">01 pick a model family</p>
@@ -108,17 +151,19 @@ export default function LaunchPage() {
             </li>
             <li className="flex justify-between border-t border-claw-border pt-2 font-bold text-claw-gold">
               <span>total</span>
-              <span>{quote.totalSol.toFixed(3)} SOL</span>
+              <span>{Number(quote.totalSol).toFixed(3)} SOL</span>
             </li>
           </ul>
         )}
-        <p className="mt-2 text-xs text-claw-muted">cluster: {quote?.cluster || "…"} · dev buy tokens are yours to claim</p>
         <div className="mt-4 flex flex-wrap gap-2">
           <button type="button" className="btn-hot" disabled={busy} onClick={create}>
-            create dev wallet
+            1 · create dev wallet
+          </button>
+          <button type="button" className="btn" disabled={busy || !fund} onClick={fundFromAuthority}>
+            2 · fund from authority (real devnet tx)
           </button>
           <button type="button" className="btn" disabled={busy || !fund} onClick={confirm}>
-            confirm launch (mock pump)
+            3 · confirm launch
           </button>
         </div>
         {fund && (
@@ -128,9 +173,14 @@ export default function LaunchPage() {
         )}
       </section>
 
-      {result && (
-        <pre className="panel p-4 text-xs overflow-x-auto text-claw-muted whitespace-pre-wrap">{result}</pre>
+      {log.length > 0 && (
+        <ul className="text-xs text-claw-muted space-y-1">
+          {log.map((l, i) => (
+            <li key={i}>// {l}</li>
+          ))}
+        </ul>
       )}
+      {result && <pre className="panel p-4 text-xs overflow-x-auto text-claw-muted whitespace-pre-wrap">{result}</pre>}
     </div>
   );
 }
