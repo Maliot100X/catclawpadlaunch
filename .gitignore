@@ -1,0 +1,12 @@
+node_modules
+.next
+.env
+.env.local
+.env.*.local
+dist
+coverage
+*.log
+.DS_Store
+.vercel
+dev-wallets/*.json
+!dev-wallets/.gitkeep

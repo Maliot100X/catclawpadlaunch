@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-claw-bg text-claw-text font-mono antialiased min-h-screen;
+}
+
+a {
+  @apply text-claw-cyan hover:text-claw-accent transition-colors;
+}
+
+.panel {
+  @apply border border-claw-border bg-claw-panel rounded-sm;
+}
+
+.btn {
+  @apply px-3 py-2 border border-claw-border bg-claw-bg hover:border-claw-cyan hover:text-claw-cyan text-sm uppercase tracking-wide;
+}
+
+.btn-hot {
+  @apply btn border-claw-accent text-claw-accent hover:bg-claw-accent hover:text-claw-bg;
+}
+
+.kicker {
+  @apply text-claw-muted text-xs tracking-[0.2em] uppercase;
+}
+
+.tab {
+  @apply px-3 py-2 text-sm text-claw-muted border-b-2 border-transparent hover:text-claw-text;
+}
+
+.tab-active {
+  @apply tab text-claw-cyan border-claw-cyan;
+}
