@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 export default function HomePage() {
   const [trends, setTrends] = useState<{source:string;title:string;heat:number}[]>([]);
@@ -8,16 +8,31 @@ export default function HomePage() {
   const [style, setStyle] = useState("auto");
   const [forged, setForged] = useState<any>(null);
   const [busy, setBusy] = useState(false);
-  const [forgedCount, setForgedCount] = useState<number|null>(null);
+  const [stats, setStats] = useState({ total: 0, onChain: 0, sim: 0 });
   const [recent, setRecent] = useState<any[]>([]);
+  const [latest, setLatest] = useState<any[]>([]);
+  const [updated, setUpdated] = useState<string>("");
+
+  const loadCoins = useCallback(() => {
+    fetch("/api/coins").then(r=>r.json()).then(j=>{
+      const coins = j.coins ?? [];
+      setStats({
+        total: (j.total ?? coins.length),
+        onChain: coins.filter((c:any)=>c.status==="LIVE").length,
+        sim: coins.filter((c:any)=>c.status!=="LIVE").length,
+      });
+      setRecent(coins.slice(0,5));
+      setLatest(coins.slice(0,7));
+      setUpdated(new Date().toLocaleTimeString());
+    }).catch(()=>{});
+  }, []);
 
   useEffect(() => {
     fetch("/api/radar").then(r=>r.json()).then(j=>setTrends(j.trends ?? [])).catch(()=>{});
-    fetch("/api/coins").then(r=>r.json()).then(j=>{
-      setForgedCount(j.total ?? null);
-      setRecent((j.coins ?? []).slice(0,5));
-    }).catch(()=>{});
-  }, []);
+    loadCoins();
+    const t = setInterval(loadCoins, 30000); // launcher-style 30s refresh
+    return () => clearInterval(t);
+  }, [loadCoins]);
 
   async function forgeNow() {
     if (!prompt.trim()) return;
@@ -30,6 +45,13 @@ export default function HomePage() {
       });
       const j = await r.json();
       setForged(j.coin);
+      // auto-record the forge like launcher's forged N/6 counter
+      await fetch("/api/coins", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ coin: j.coin }),
+      });
+      loadCoins();
     } finally { setBusy(false); }
   }
 
@@ -73,7 +95,7 @@ export default function HomePage() {
           </p>
           <div className="mt-8 grid gap-2 mono text-[11px]">
             {[
-              ["coins forged", forgedCount != null ? String(forgedCount) : "—", "on-chain + simulated"],
+              ["coins forged", String(stats.total), `${stats.onChain} on-chain · ${stats.sim} simulated`],
               ["trends tracked", String(trends.length), "sources online"],
               ["radar", "OFF", "0 scans · live wallet"],
               ["network", "SOL", "pump.fun · devnet"],
@@ -117,7 +139,9 @@ export default function HomePage() {
 
           {forged && (
             <div className="mt-5 border-t border-[var(--line)] pt-4">
-              <p className="kicker">what you get · forged {forged.source} · {forged.logoModel === "flux.1-schnell" ? "FLUX real image" : (forged.logoNote ?? "procedural")}</p>
+              <p className="kicker">
+                coin preview · {forged.brain === "river-deepseek" ? "REAL BRAIN" : "DEMO BRAIN"} · {forged.logoModel === "flux.1-schnell" ? "logo: FLUX real" : "logo: procedural"}
+              </p>
               <div className="mt-3 grid gap-3 grid-cols-[90px_1fr] items-start">
                 {forged.logoUrl ? (
                   <img src={forged.logoUrl} alt={`${forged.name} logo`} className="border border-[var(--line)] aspect-square w-full object-cover" />
@@ -127,11 +151,13 @@ export default function HomePage() {
                   </div>
                 )}
                 <div>
-                  <input value={forged.name} onChange={e=>setForged({...forged, name: e.target.value})} className="w-full bg-transparent border-b border-[var(--line)] font-bold focus:border-[var(--lime)] outline-none" />
-                  <input value={forged.ticker} onChange={e=>setForged({...forged, ticker: e.target.value})} className="w-full bg-transparent border-b border-[var(--line)] mono text-[var(--lime)] text-sm focus:border-[var(--lime)] outline-none" />
-                  <textarea value={forged.description} onChange={e=>setForged({...forged, description: e.target.value})} rows={3} className="mt-2 w-full bg-transparent text-xs text-[var(--muted)] border border-[var(--line)] p-2 focus:border-[var(--lime)] outline-none" />
-                  <button className="chip mt-2" onClick={forgeNow}>↻ regenerate logo</button>
-                  <Link href="/forge" className="btn mt-3 inline-block">edit + launch →</Link>
+                  <input value={forged.name} onChange={e=>setForged({...forged, name: e.target.value})}
+                    className="w-full bg-transparent border-b border-[var(--line)] font-bold focus:border-[var(--lime)] outline-none" />
+                  <input value={forged.ticker} onChange={e=>setForged({...forged, ticker: e.target.value.toUpperCase()})}
+                    className="w-full bg-transparent border-b border-[var(--line)] mono text-[var(--lime)] text-sm outline-none" />
+                  <textarea value={forged.description} onChange={e=>setForged({...forged, description: e.target.value})} rows={3}
+                    className="mt-2 w-full bg-transparent text-xs text-[var(--muted)] border border-[var(--line)] p-2 outline-none" />
+                  <Link href="/forge" className="btn mt-3 inline-block">edit socials + launch →</Link>
                 </div>
               </div>
             </div>
@@ -139,26 +165,57 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* recent launches */}
+      {/* HOT RIGHT NOW */}
+      <section className="panel p-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="kicker m-0">what the internet is on right now</p>
+          <span className="chip chip-on">HOT RIGHT NOW</span>
+          <span className="mono text-[10px] text-[var(--muted)]">LIVE · {updated || "…"}</span>
+          <div className="ml-auto flex flex-wrap gap-1">
+            {["G Google","B Bluesky","M Mastodon","R Reddit"].map(s=>(
+              <span key={s} className={`chip ${s.split(" ")[1]==="Reddit"?"":"chip-on"}`}>{s}</span>
+            ))}
+          </div>
+        </div>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {trends.slice(0,6).map((t,i)=>(
+            <div key={i} className="border border-[var(--line)] px-3 py-2 bg-[#04050c] flex items-center gap-2">
+              <span className="mono text-[10px] text-[var(--lime)] w-4">{t.source}</span>
+              <span className="text-xs flex-1 truncate">{t.title}</span>
+              <span className="mono text-[10px] text-[var(--cyan)]">{t.heat}</span>
+            </div>
+          ))}
+        </div>
+:p      </section>
+
+      {/* live from the launchpad */}
       <section>
         <div className="flex items-baseline justify-between">
           <p className="k">// live from the launchpad</p>
-          <Link href="/coins" className="mono text-[11px] text-[var(--cyan)]">all →</Link>
+          <span className="mono text-[10px] text-[var(--muted)]">latest launches · refreshes every 30s · {updated}</span>
         </div>
         <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {recent.length === 0 && (
-            <div className="panel p-4 mono text-xs text-[var(--muted)]">no launches yet — forge the first one</div>
-          )}
-          {recent.map((c)=>(
+          {latest.map((c)=>(
             <Link key={c.id} href={`/coin/${c.mint ?? c.id}`} className="panel p-3 hover:border-[var(--lime)]">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-bold">{c.name}</span>
                 <span className="mono text-[var(--lime)] text-xs">{c.ticker}</span>
               </div>
-              <div className="mono text-[10px] text-[var(--muted)] mt-1">{c.source ?? "forge"} · {c.when ?? ""}</div>
+              <div className="mono text-[10px] text-[var(--muted)] mt-1">
+                {String(c.when).slice(0,10)} · {c.source ?? "forge"} · {c.status ?? "SIM"}
+              </div>
             </Link>
           ))}
+          {latest.length===0 && <div className="panel p-4 mono text-xs text-[var(--muted)]">no launches yet — forge the first one</div>}
         </div>
+      </section>
+
+      {/* platform token strip */}
+      <section className="panel p-4 flex flex-wrap items-center gap-3">
+        <span className="chip chip-on">LIVE</span>
+        <span className="mono text-sm text-[var(--lime)]">$CLAW</span>
+        <span className="text-xs text-[var(--muted)]">platform token · FEES → TREASURY → BUYBACK → BURN · 0.02 SOL per launch + 1% on buys</span>
+        <Link href="/tokenomics" className="btn ml-auto mono text-[10px]">see the numbers →</Link>
       </section>
 
       {/* HOW 01-03 */}
@@ -186,7 +243,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Footer disclaimer */}
       <section className="border-t border-[var(--line)] pt-6 pb-10 mono text-[11px] text-[var(--muted)]">
         CATCLAWPAD · meme coins are extremely high risk. this tool automates token creation;
         it does not give financial advice. launch responsibly and only with funds you can afford to lose.
