@@ -3,7 +3,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 export default function HomePage() {
-  const [trends, setTrends] = useState<{source:string;title:string;heat:number}[]>([]);
+  const [trends, setTrends] = useState<{source:string;title:string;heat:number;url?:string}[]>([]);
+  const [srcInfo, setSrcInfo] = useState<{online?:number;counts?:Record<string,number>}>({});
   const [prompt, setPrompt] = useState("");
   const [style, setStyle] = useState("auto");
   const [forged, setForged] = useState<any>(null);
@@ -28,7 +29,10 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
-    fetch("/api/radar").then(r=>r.json()).then(j=>setTrends(j.trends ?? [])).catch(()=>{});
+    fetch("/api/radar").then(r=>r.json()).then(j=>{
+      setTrends(j.trends ?? []);
+      setSrcInfo({ online: j.sources?.online, counts: j.counts });
+    }).catch(()=>{});
     loadCoins();
     const t = setInterval(loadCoins, 30000); // launcher-style 30s refresh
     return () => clearInterval(t);
@@ -96,7 +100,7 @@ export default function HomePage() {
           <div className="mt-8 grid gap-2 mono text-[11px]">
             {[
               ["coins forged", String(stats.total), `${stats.onChain} on-chain · ${stats.sim} simulated`],
-              ["trends tracked", String(trends.length), "sources online"],
+              ["trends tracked", String(trends.length), `${srcInfo.online ?? 0} sources online`],
               ["radar", "OFF", "0 scans · live wallet"],
               ["network", "SOL", "pump.fun · devnet"],
             ].map(([k,v,s])=>(
@@ -172,9 +176,10 @@ export default function HomePage() {
           <span className="chip chip-on">HOT RIGHT NOW</span>
           <span className="mono text-[10px] text-[var(--muted)]">LIVE · {updated || "…"}</span>
           <div className="ml-auto flex flex-wrap gap-1">
-            {["G Google","B Bluesky","M Mastodon","R Reddit"].map(s=>(
-              <span key={s} className={`chip ${s.split(" ")[1]==="Reddit"?"":"chip-on"}`}>{s}</span>
-            ))}
+            {[["G","Google"],["B","Bluesky"],["M","Mastodon"],["R","Reddit"]].map(([k,label])=>{
+              const n = srcInfo.counts?.[k] ?? 0;
+              return <span key={k} className={`chip ${n>0?"chip-on":""}`}>{k} {label}{n>0?` ${n}`:""}</span>;
+            })}
           </div>
         </div>
         <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">

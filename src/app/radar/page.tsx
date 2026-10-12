@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 
-type Trend = { source: string; title: string; heat: number; kind: string };
+type Trend = { source: string; title: string; heat: number; kind: string; url?: string };
 
 export default function RadarPage() {
   const [status, setStatus] = useState("IDLE");
@@ -14,6 +14,7 @@ export default function RadarPage() {
   const [devBuy, setDevBuy] = useState(0.01);
   const [minHeat, setMinHeat] = useState(35);
   const [saved, setSaved] = useState("");
+  const [counts, setCounts] = useState<Record<string, number>>({});
 
   async function scanNow() {
     setRunning(true);
@@ -22,7 +23,8 @@ export default function RadarPage() {
       const j = await r.json();
       setStatus(j.status ?? "IDLE");
       setTrends(j.trends ?? []);
-      setLog((L) => [`${new Date().toLocaleTimeString()} · scan ok · ${j.trends?.length ?? 0} topics · hottest ${(j.trends ?? [])[0]?.title ?? "—"}`, ...L].slice(0, 20));
+      setLog((L) => [`${new Date().toLocaleTimeString()} · scan ok · ${j.trends?.length ?? 0} topics · ${j.sources?.online ?? 0}/4 sources · hottest ${(j.trends ?? [])[0]?.title ?? "—"}`, ...L].slice(0, 20));
+      setCounts(j.counts ?? {});
     } finally {
       setRunning(false);
     }
@@ -55,10 +57,10 @@ export default function RadarPage() {
         <div className="panel p-4">
           <p className="kicker">sources</p>
           <div className="mt-2 flex flex-wrap gap-1">
-            <span className="chip chip-on">G Google</span>
-            <span className="chip chip-on">B Bluesky</span>
-            <span className="chip chip-on">M Mastodon</span>
-            <span className="chip">R Reddit</span>
+            {[["G","Google"],["B","Bluesky"],["M","Mastodon"],["R","Reddit"]].map(([k,label])=>{
+              const n = counts[k] ?? 0;
+              return <span key={k} className={`chip ${n>0?"chip-on":""}`}>{k} {label}{n>0?` ${n}`:""}</span>;
+            })}
           </div>
         </div>
         <div className="panel p-4">
@@ -112,7 +114,11 @@ export default function RadarPage() {
             {trends.map((t,i)=>(
               <div key={i} className="flex items-center gap-3 border border-[var(--line)] px-3 py-2 bg-[#04050c]">
                 <span className="mono text-[10px] text-[var(--lime)] w-4">{t.source}</span>
-                <span className="text-xs flex-1 truncate">{t.title}</span>
+                {t.url ? (
+                  <a href={t.url} target="_blank" rel="noreferrer" className="text-xs flex-1 truncate hover:text-[var(--lime)]">{t.title}</a>
+                ) : (
+                  <span className="text-xs flex-1 truncate">{t.title}</span>
+                )}
                 <span className="mono text-[10px] text-[var(--cyan)]">{t.heat}</span>
               </div>
             ))}
