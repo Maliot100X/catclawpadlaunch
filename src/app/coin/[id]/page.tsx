@@ -28,13 +28,25 @@ export default function CoinPage({ params }: { params: Promise<{ id: string }> }
           </div>
           <p className="mt-3 text-sm text-[var(--muted)] max-w-xl">{coin.description}</p>
           <div className="mt-3 flex flex-wrap gap-1">
-            {(coin.tags ?? []).map((t:string)=><span key={t} className="chip">{t}</span>)}
+            {(coin.tags ?? []).map((t:string)=><span key={t} className="chip">#{String(t).replace(/^#/,"")}</span>)}
           </div>
+          {coin.mint && (
+            <div className="mt-2 mono text-[10px] text-[var(--muted)]">
+              mint {String(coin.mint).slice(0,10)}…{String(coin.mint).slice(-6)}
+              {coin.spentSol ? ` · spent ${Number(coin.spentSol).toFixed(5)} SOL` : ""}
+            </div>
+          )}
           <div className="mt-5 flex flex-wrap gap-2">
             {coin.mint && (
               <>
-                <a className="btn btn-forge" href={`https://pump.fun/coin/${coin.mint}`} target="_blank" rel="noreferrer">pump.fun ↗</a>
-                <a className="btn" href={`https://solscan.io/tx/${coin.mint}`} target="_blank" rel="noreferrer">solscan ↗</a>
+                <a className="btn btn-forge" href={coin.explorer ?? `https://explorer.solana.com/address/${coin.mint}?cluster=devnet`} target="_blank" rel="noreferrer">explorer ↗</a>
+                {coin.createSig && (
+                  <a className="btn" href={`https://explorer.solana.com/tx/${coin.createSig}?cluster=devnet`} target="_blank" rel="noreferrer">create tx ↗</a>
+                )}
+                {coin.mintSig && (
+                  <a className="btn" href={`https://explorer.solana.com/tx/${coin.mintSig}?cluster=devnet`} target="_blank" rel="noreferrer">mint tx ↗</a>
+                )}
+                <a className="btn opacity-50" href={`https://pump.fun/coin/${coin.mint}`} target="_blank" rel="noreferrer">pump.fun (mainnet only)</a>
               </>
             )}
             <span className="mono text-[11px] text-[var(--muted)] self-center">{coin.source} · {coin.when}</span>
