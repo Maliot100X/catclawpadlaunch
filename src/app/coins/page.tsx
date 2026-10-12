@@ -18,7 +18,7 @@ export default function CoinsPage() {
       <div>
         <p className="kicker">launched coins</p>
         <h2 className="text-2xl font-bold">EVERY COIN FORGED WITH CATCLAWPAD.</h2>
-        <p className="mt-2 mono text-[11px] text-[var(--muted)]">{total} forged · source, logo, ticker, pump.fun and solscan links.</p>
+        <p className="mt-2 mono text-[11px] text-[var(--muted)]">{total} forged · devnet mints, logos, tickers and explorer links.</p>
       </div>
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {coins.length === 0 && <div className="panel p-4 mono text-xs text-[var(--muted)]">nothing forged yet — go forge the first</div>}

@@ -2,10 +2,12 @@
 import { TopNav } from "./TopNav";
 import { WalletProviders } from "./WalletProviders";
 import { LiveTicker } from "./LiveTicker";
+import { ChunkRecovery } from "./ChunkRecovery";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <WalletProviders>
+      <ChunkRecovery />
       <TopNav />
       <LiveTicker />
       <div className="shell py-8">{children}</div>
