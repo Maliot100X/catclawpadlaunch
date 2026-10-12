@@ -3,6 +3,8 @@ import { pinJsonToIpfs, pinataConfigured } from "@/lib/integrations";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
 
 // Token metadata in the shape wallets/explorers expect.
 // Served by us, so no IPFS pinning service is required for a devnet mint.
@@ -11,7 +13,7 @@ export async function GET(_req: Request, ctx: { params: { mint: string } }) {
   const coins = await listCoins(200);
   const c: any = coins.find((x: any) => x.mint === mint) ?? coins.find((x: any) => String(x.id) === mint);
   if (!c) {
-    return Response.json({ error: "unknown mint" }, { status: 404 });
+    return Response.json({ error: "unknown mint", mint }, { status: 404, headers: { "Cache-Control": "no-store" } });
   }
   const origin = process.env.NEXT_PUBLIC_SITE_URL || "https://catclawpad.vercel.app";
   const meta = {
@@ -36,6 +38,6 @@ export async function GET(_req: Request, ctx: { params: { mint: string } }) {
   const pinned = pinataConfigured() ? await pinJsonToIpfs(meta, `clawpad-${c.ticker || c.id}`) : null;
   return Response.json(
     pinned ? { ...meta, ipfs: pinned.uri, ipfs_gateway: pinned.gateway } : meta,
-    { headers: { "Cache-Control": "public, max-age=60" } }
+    { headers: { "Cache-Control": "no-store" } }
   );
 }
