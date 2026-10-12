@@ -7,6 +7,7 @@ const TABS = [
   { href: "/forge", label: "FORGE" },
   { href: "/radar", label: "TREND RADAR" },
   { href: "/coins", label: "LAUNCHED" },
+  { href: "/trade", label: "TRADE" },
   { href: "/tokenomics", label: "TOKENOMICS" },
 ];
 
