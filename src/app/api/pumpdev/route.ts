@@ -27,7 +27,7 @@ async function collect(url: string, subscribe: Record<string, unknown>, want: nu
       if (settled) return;
       settled = true;
       try { ws?.close(); } catch { /* ignore */ }
-      resolve(events.filter((e) => !["connected", "connectionStatus", "subscribed", "unsubscribed"].includes(String(e.type))));
+      resolve(events.filter((e) => !["connected", "connectionStatus", "subscribed", "unsubscribed", "auth"].includes(String(e.type))));
     };
     const timer = setTimeout(finish, ms);
     try {
@@ -43,7 +43,7 @@ async function collect(url: string, subscribe: Record<string, unknown>, want: nu
       try {
         const j = JSON.parse(d.toString());
         events.push(j);
-        if (events.filter((e) => e.type && !["connected", "connectionStatus", "subscribed"].includes(e.type)).length >= want) {
+        if (events.filter((e) => String(e.type || "") && !["connected", "connectionStatus", "subscribed", "auth"].includes(String(e.type))).length >= want) {
           clearTimeout(timer); finish();
         }
       } catch { /* ignore non-JSON */ }
@@ -77,31 +77,48 @@ export async function GET(req: NextRequest) {
 
   const normalize = (e: Ev) => {
     const t = String(e.type || "");
-    if (t === "newToken" || e.mint) {
+    const quoteLabel = e.quoteMint === "So11111111111111111111111111111111111111112" ? "SOL" : (e.quoteMint || "SOL");
+    const quoteAmount = e.quoteAmount ?? e.solAmount ?? null;
+    const trader = e.traderPublicKey ?? e.trader ?? null;
+
+    // a trade frame: has txType (buy|sell|create) and/or a signature — check BEFORE e.mint
+    const isTrade = Boolean(e.txType) || Boolean(e.signature);
+    if (isTrade && e.txType !== "create") {
+      return {
+        kind: "trade",
+        mint: e.mint,
+        txType: e.txType || (e.isBuy === false ? "sell" : "buy"),
+        solAmount: quoteAmount != null ? Number(quoteAmount) : null,
+        quoteMint: e.quoteMint ?? null,
+        quoteLabel,
+        tokenAmount: e.tokenAmount != null ? Number(e.tokenAmount) : null,
+        marketCapSol: e.marketCapSol != null ? Number(e.marketCapSol) : null,
+        priceUsd: e.priceUsd ?? null,
+        trader,
+        signature: e.signature ?? null,
+        at: e.timestamp ?? Date.now(),
+      };
+    }
+
+    // a creation frame
+    if (t === "newToken" || e.txType === "create" || (e.mint && (e.name || e.symbol))) {
       return {
         kind: "newToken",
         mint: e.mint,
         name: e.name,
         symbol: e.symbol,
         uri: e.uri,
-        traderPublicKey: e.traderPublicKey,
-        initialBuy: e.initialBuy,
-        marketCapSol: e.marketCapSol,
-        solAmount: e.solAmount,
+        trader,
+        initialBuy: quoteAmount != null ? Number(quoteAmount) : null,
+        quoteLabel,
+        marketCapSol: e.marketCapSol != null ? Number(e.marketCapSol) : null,
+        signature: e.signature ?? null,
         at: e.timestamp ?? Date.now(),
       };
     }
-    if (t === "trade" || e.txType) {
-      return {
-        kind: "trade",
-        mint: e.mint,
-        txType: e.txType,               // buy | sell
-        solAmount: e.solAmount,
-        tokenAmount: e.tokenAmount,
-        marketCapSol: e.marketCapSol,
-        trader: e.traderPublicKey,
-        at: e.timestamp ?? Date.now(),
-      };
+
+    if (t === "error" || t === "quota") {
+      return { kind: t, message: e.message ?? e.status ?? null, raw: e };
     }
     return { kind: t || "event", raw: e };
   };
