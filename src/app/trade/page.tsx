@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { VersionedTransaction } from "@solana/web3.js";
 
@@ -12,8 +11,7 @@ const DECIMALS: Record<string, number> = { [SOL]: 9, [USDC]: 6 };
 type Coin = { id: number; name: string; ticker: string; mint: string | null; status: string };
 
 export default function TradePage() {
-  const search = useSearchParams();
-  const prefill = search?.get("mint") || "";
+  const [prefill, setPrefill] = useState("");
   const { connection } = useConnection();
   const { publicKey, connect, connected, signTransaction } = useWallet();
 
@@ -31,9 +29,12 @@ export default function TradePage() {
 
   const push = (s: string) => setLog((L) => [`${new Date().toLocaleTimeString()} · ${s}`, ...L].slice(0, 30));
 
+  // read ?mint= from the URL on the client only (avoids the useSearchParams prerender bailout)
   useEffect(() => {
-    if (prefill && prefill.length > 30) { setCustomMint(prefill); setMint(prefill); }
-  }, [prefill]);
+    if (typeof window === "undefined") return;
+    const m = new URLSearchParams(window.location.search).get("mint") || "";
+    if (m.length > 30) { setPrefill(m); setCustomMint(m); setMint(m); }
+  }, []);
 
   useEffect(() => {
     fetch("/api/coins").then((r) => r.json()).then((j) => {
