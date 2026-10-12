@@ -87,7 +87,7 @@ export default function CoinsPage() {
             </div>
           )}
           {mine.map((c) => (
-            <div key={c.id} className="border border-[var(--line)] p-3 bg-[#04050c]">
+            <Link key={c.id} href={`/coin/${c.mint}`} className="border border-[var(--line)] p-3 bg-[#04050c] block hover:border-[var(--lime)]">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-sm font-bold truncate">{c.name}</span>
                 <span className="mono text-[var(--lime)] text-xs">{c.ticker}</span>
@@ -96,11 +96,12 @@ export default function CoinsPage() {
                 devnet · {c.status} · {String(c.when).slice(0, 10)}
               </div>
               <div className="mt-2 flex flex-wrap gap-1">
-                <Link href={`/coin/${c.mint}`} className="chip">preview</Link>
+                <span className="chip chip-on">preview →</span>
                 <a className="chip" target="_blank" rel="noreferrer" href={`https://explorer.solana.com/address/${c.mint}?cluster=devnet`}>explorer ↗</a>
                 <a className="chip" target="_blank" rel="noreferrer" href={`/api/metadata/${c.mint}`}>metadata ↗</a>
+                <a className="chip" target="_blank" rel="noreferrer" href={`/api/og/${c.mint}`}>share card ↗</a>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       </section>
@@ -122,12 +123,16 @@ export default function CoinsPage() {
           const grad = c.complete || c.bondingProgressPct >= 99.9;
           return (
             <div key={c.mint} className="panel p-3">
-              <div className="flex items-start justify-between gap-2">
+              <Link href={`/coin/${c.mint}`} className="flex items-start justify-between gap-2 hover:opacity-90">
                 <div className="min-w-0">
                   <div className="text-sm font-bold truncate">{c.name}</div>
                   <div className="mono text-[11px] text-[var(--lime)]">{c.symbol}</div>
                 </div>
+                <span className="mono text-[10px] text-[var(--cyan)]">preview →</span>
+              </Link>
+              <div className="mt-2 flex items-center gap-2">
                 <span className={`chip ${grad ? "chip-on" : ""}`}>{grad ? "GRAD" : "CURVE"}</span>
+                <Link className="chip" href={`/coin/${c.mint}`}>our page →</Link>
               </div>
 
               <div className="mt-3">
