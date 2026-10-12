@@ -24,6 +24,7 @@ export default function TradePage() {
   const [status, setStatus] = useState<string>("");
   const [txSig, setTxSig] = useState<string>("");
   const [log, setLog] = useState<string[]>(["dex terminal ready · real jupiter routing · wallet-signed execution"]);
+  const [customMint, setCustomMint] = useState<string>("");
 
   const push = (s: string) => setLog((L) => [`${new Date().toLocaleTimeString()} · ${s}`, ...L].slice(0, 30));
 
@@ -31,9 +32,9 @@ export default function TradePage() {
     fetch("/api/coins").then((r) => r.json()).then((j) => {
       const live = (j.coins ?? []).filter((c: Coin) => c.mint);
       setCoins(live);
-      // keep the default (USDC) unless a launched mint exists — the select must always be valid
-      if (live[0]?.mint) setMint(live[0].mint);
-      else setMint(USDC);
+      // Our own mints are devnet-only (no mainnet liquidity) so they are listed,
+      // never auto-selected. The terminal trades real routable tokens.
+      setMint(USDC);
     }).catch(() => {});
   }, []);
 
@@ -42,13 +43,11 @@ export default function TradePage() {
       { mint: SOL, label: "SOL", decimals: 9 },
       { mint: USDC, label: "USDC", decimals: 6 },
     ];
-    for (const c of coins) {
-      if (c.mint && !list.some((t) => t.mint === c.mint)) {
-        list.push({ mint: c.mint, label: `${c.ticker} · ${c.name}`, decimals: 9 });
-      }
+    if (customMint && !list.some((t) => t.mint === customMint)) {
+      list.push({ mint: customMint, label: `pasted · ${customMint.slice(0, 6)}…`, decimals: 9 });
     }
     return list;
-  }, [coins]);
+  }, [customMint]);
 
   const selected = tokens.find((t) => t.mint === mint) ?? tokens[0];
   const inMint = side === "buy" ? SOL : mint;
@@ -131,7 +130,23 @@ export default function TradePage() {
               className="mt-1 w-full bg-[#04050c] border border-[var(--line)] p-2 mono text-xs outline-none focus:border-[var(--lime)]">
               {tokens.map((t) => <option key={t.mint} value={t.mint}>{t.label}</option>)}
             </select>
-            {coins.length === 0 && <span className="mono text-[10px] text-[var(--muted)]">no launched mints yet — forge + launch one, it appears here</span>}
+            <input
+              value={customMint}
+              onChange={(e) => { const v = e.target.value.trim(); setCustomMint(v); if (v.length > 30) setMint(v); }}
+              placeholder="…or paste any mainnet SPL mint to trade it"
+              className="mt-2 w-full bg-[#04050c] border border-[var(--line)] p-2 mono text-[11px] outline-none focus:border-[var(--lime)]"
+            />
+            {coins.length > 0 && (
+              <div className="mt-2 border border-[var(--line)] p-2">
+                <p className="mono text-[10px] uppercase text-[var(--muted)]">your devnet mints · no mainnet liquidity</p>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {coins.slice(0, 6).map((c) => (
+                    <a key={c.id} href={`https://explorer.solana.com/address/${c.mint}?cluster=devnet`} target="_blank" rel="noreferrer"
+                       className="chip">{c.ticker} ↗</a>
+                  ))}
+                </div>
+              </div>
+            )}
           </label>
 
           <div className="grid gap-3 sm:grid-cols-2">
