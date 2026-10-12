@@ -1,5 +1,6 @@
 import { forge } from "@/lib/forge";
 import { logoPrompt } from "@/lib/logo";
+import { brainstorm } from "@/lib/brain";
 import { NextRequest } from "next/server";
 
 export const runtime = "nodejs";
@@ -42,9 +43,14 @@ export async function POST(req: NextRequest) {
     trend: body.trend,
     style: body.style,
   });
+
+  // Real brain first: River DeepSeek. Local deterministic fallback keeps the forge never-blank.
+  const raw = body.prompt || body.xPost || body.hashtag || body.tiktok || body.trend || coin.name;
+  const brain = await brainstorm(raw, coin.source, process.env.FORGE_BRAIN_BASE, process.env.RIVER_API_KEY, process.env.FORGE_BRAIN_MODEL);
+  const finalCoin = brain ? { ...coin, ...brain, logoStyle: coin.logoStyle } : coin;
   const wantImage = body.image !== false;
   const img = wantImage
-    ? await fluxLogo(coin.name, coin.ticker, coin.description, coin.logoStyle)
+    ? await fluxLogo(finalCoin.name, finalCoin.ticker, finalCoin.description, finalCoin.logoStyle)
     : { url: null, model: "skipped", creditNote: "image=false" };
-  return Response.json({ ok: true, coin: { ...coin, logoUrl: img.url, logoModel: img.model, logoNote: img.creditNote } });
+  return Response.json({ ok: true, coin: { ...finalCoin, logoUrl: img.url, logoModel: img.model, logoNote: img.creditNote } });
 }
