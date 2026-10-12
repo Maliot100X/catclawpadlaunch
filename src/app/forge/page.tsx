@@ -11,6 +11,7 @@ type ForgeResult = {
   source: string;
   brain?: string;
   logoUrl?: string | null;
+  logoHostedUrl?: string | null;
   logoModel?: string;
   logoNote?: string;
 };
@@ -76,7 +77,7 @@ export default function ForgePage() {
       await fetch("/api/coins", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ coin: { ...result, devBuy, socials } }),
+        body: JSON.stringify({ coin: { ...result, logoUrl: result.logoHostedUrl ?? null, devBuy, socials } }),
       });
       const r = await fetch("/api/launch", {
         method: "POST",
@@ -98,7 +99,7 @@ export default function ForgePage() {
       await fetch("/api/coins", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ coin: { ...result, source: result.source, devBuy, dryRun: dry, socials } }),
+        body: JSON.stringify({ coin: { ...result, logoUrl: result.logoHostedUrl ?? null, devBuy, dryRun: dry, socials } }),
       });
       setForged(true);
     } finally { setBusy(false); }
