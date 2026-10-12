@@ -1,8 +1,10 @@
 "use client";
-import { use, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 
-export default function CoinPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function CoinPage() {
+  const p = useParams<{ id: string }>();
+  const id = p?.id ?? "";
   const [coin, setCoin] = useState<any>(null);
 
   useEffect(() => {
