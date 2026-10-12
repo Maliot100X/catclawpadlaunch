@@ -1,4 +1,5 @@
 import { listCoins } from "@/lib/db";
+import { pinJsonToIpfs, pinataConfigured } from "@/lib/integrations";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,8 +14,7 @@ export async function GET(_req: Request, ctx: { params: { mint: string } }) {
     return Response.json({ error: "unknown mint" }, { status: 404 });
   }
   const origin = process.env.NEXT_PUBLIC_SITE_URL || "https://catclawpad.vercel.app";
-  return Response.json(
-    {
+  const meta = {
       name: c.name,
       symbol: String(c.ticker || "").replace("$", ""),
       description: c.description ?? "",
@@ -30,7 +30,12 @@ export async function GET(_req: Request, ctx: { params: { mint: string } }) {
         cluster: process.env.NEXT_PUBLIC_CLUSTER || "devnet",
         created: c.when,
       },
-    },
+  };
+
+  // Pin the metadata to IPFS when Pinata is configured, so the URI is permanent.
+  const pinned = pinataConfigured() ? await pinJsonToIpfs(meta, `clawpad-${c.ticker || c.id}`) : null;
+  return Response.json(
+    pinned ? { ...meta, ipfs: pinned.uri, ipfs_gateway: pinned.gateway } : meta,
     { headers: { "Cache-Control": "public, max-age=60" } }
   );
 }

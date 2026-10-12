@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { cacheGet, cacheSet } from "@/lib/integrations";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -103,13 +104,16 @@ async function redditTrends(): Promise<Trend[]> {
 }
 
 export async function GET() {
+  const cached = await cacheGet<any>("clawpad:trends:v1");
+  if (cached?.trends?.length) return Response.json({ ...cached, cached: true });
+
   const [g, b, m, r] = await Promise.all([googleTrends(), blueskyTrends(), mastodonTrends(), redditTrends()]);
   const all = [...g, ...b, ...m, ...r];
   const sourcesOnline = [g.length, b.length, m.length, r.length].filter((n) => n > 0).length;
   const trends = all.sort((x, y) => y.heat - x.heat).slice(0, 24);
   const bySource = (s: string) => trends.filter((t) => t.source === s).length;
 
-  return Response.json({
+  const payload = {
     status: "LIVE",
     cluster: process.env.NEXT_PUBLIC_CLUSTER || "devnet",
     mode: "live",
@@ -118,7 +122,9 @@ export async function GET() {
     trends,
     scannedAt: new Date().toISOString(),
     updated: Date.now(),
-  });
+  };
+  await cacheSet("clawpad:trends:v1", payload, 120);
+  return Response.json(payload);
 }
 
 export async function POST(req: NextRequest) {

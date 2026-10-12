@@ -1,6 +1,7 @@
 import { forge } from "@/lib/forge";
 import { logoPrompt } from "@/lib/logo";
 import { brainstorm } from "@/lib/brain";
+import { groqText } from "@/lib/integrations";
 import { NextRequest } from "next/server";
 
 export const runtime = "nodejs";
@@ -63,7 +64,27 @@ export async function POST(req: NextRequest) {
 
   // Real brain first: River DeepSeek. Local deterministic fallback keeps the forge never-blank.
   const raw = body.prompt || body.xPost || body.hashtag || body.tiktok || body.trend || coin.name;
-  const brain = await brainstorm(raw, coin.source, process.env.FORGE_BRAIN_BASE, process.env.RIVER_API_KEY, process.env.FORGE_BRAIN_MODEL);
+  let brain = await brainstorm(raw, coin.source, process.env.FORGE_BRAIN_BASE, process.env.RIVER_API_KEY, process.env.FORGE_BRAIN_MODEL);
+  if (!brain) {
+    // Tier 2: Groq, when configured. Same JSON contract as the River tier.
+    const sys = `You are the branding engine of a Solana meme-coin launchpad. Reply ONLY with compact JSON: {"name":"<max 3 words>","ticker":"<2-6 uppercase>","description":"<2 sentences of meme lore ending with 'Launched thru catclawpad.'>","tags":["<src>","<2-3 words>"]}`;
+    const txt = await groqText(sys, `Idea (${coin.source}): ${raw}`);
+    const m = txt?.match(/\{[\s\S]*\}/);
+    if (m) {
+      try {
+        const p = JSON.parse(m[0]);
+        if (p?.name && p?.ticker && p?.description) {
+          brain = {
+            name: String(p.name).slice(0, 40),
+            ticker: "$" + String(p.ticker).toUpperCase().replace(/[^A-Z]/g, "").slice(0, 6),
+            description: String(p.description).slice(0, 280),
+            tags: Array.isArray(p.tags) ? p.tags.slice(0, 5).map(String) : [coin.source, "meme"],
+            brain: "groq",
+          } as any;
+        }
+      } catch { /* fall through to local */ }
+    }
+  }
   const finalCoin = brain ? { ...coin, ...brain, logoStyle: coin.logoStyle } : coin;
   const wantImage = body.image !== false;
   const img = wantImage
