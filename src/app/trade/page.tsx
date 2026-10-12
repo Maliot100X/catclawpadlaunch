@@ -16,7 +16,7 @@ export default function TradePage() {
 
   const [coins, setCoins] = useState<Coin[]>([]);
   const [side, setSide] = useState<"buy" | "sell">("buy");
-  const [mint, setMint] = useState<string>("");
+  const [mint, setMint] = useState<string>(USDC);
   const [amount, setAmount] = useState("0.1");
   const [slippage, setSlippage] = useState("50");
   const [quote, setQuote] = useState<any>(null);
@@ -31,7 +31,9 @@ export default function TradePage() {
     fetch("/api/coins").then((r) => r.json()).then((j) => {
       const live = (j.coins ?? []).filter((c: Coin) => c.mint);
       setCoins(live);
+      // keep the default (USDC) unless a launched mint exists — the select must always be valid
       if (live[0]?.mint) setMint(live[0].mint);
+      else setMint(USDC);
     }).catch(() => {});
   }, []);
 
