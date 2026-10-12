@@ -13,3 +13,4 @@ dev-wallets/*.json
 .env*
 .firecrawl_key
 .data/logos/
+test-launch.mjs
