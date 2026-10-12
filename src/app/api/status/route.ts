@@ -49,14 +49,17 @@ export async function GET() {
   }
 
   // Brain tiers
+  const riverOk = Boolean(process.env.RIVER_API_KEY && process.env.FORGE_BRAIN_BASE);
   checks.brain = {
-    river: Boolean(process.env.RIVER_API_KEY && process.env.FORGE_BRAIN_BASE),
+    ok: riverOk || Boolean(process.env.GROQ_API_KEY),
+    river: riverOk,
     groq: Boolean(process.env.GROQ_API_KEY),
     model: process.env.FORGE_BRAIN_MODEL || null,
   };
 
   // Image gen
   checks.images = {
+    ok: Boolean(process.env.POLLINATIONS_API_KEY),
     pollinations: Boolean(process.env.POLLINATIONS_API_KEY),
     model: "black-forest-labs/flux.1-schnell",
   };
