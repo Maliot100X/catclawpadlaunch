@@ -39,7 +39,7 @@ export async function GET(_req: Request, ctx: { params: { mint: string } }) {
 
   // real market data
   try {
-    const r = await fetch(`https://frontend-api-v3.pump.fun/coins/${mint}`, {
+    const r = await fetch(`https://frontend-api-v3.pump.fun/coins-v2/${mint}`, {
       headers: { "User-Agent": UA, Accept: "application/json" },
       signal: AbortSignal.timeout(9000), cache: "no-store",
     });
@@ -62,6 +62,9 @@ export async function GET(_req: Request, ctx: { params: { mint: string } }) {
       const pairs = await r.json();
       const best = Array.isArray(pairs) ? pairs.sort((a: any, b: any) => Number(b?.liquidity?.usd ?? 0) - Number(a?.liquidity?.usd ?? 0))[0] : null;
       if (best) {
+        name = name === "Unknown token" ? (best?.baseToken?.name ?? name) : name;
+        ticker = ticker || (best?.baseToken?.symbol ? `$${best.baseToken.symbol}` : "");
+        image = image ?? best?.info?.imageUrl ?? null;
         price = Number(best.priceUsd ?? 0);
         mcap = mcap || Number(best.marketCap ?? best.fdv ?? 0);
         if (curve == null) curve = 100;

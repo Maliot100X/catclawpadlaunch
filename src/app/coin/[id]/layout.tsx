@@ -16,7 +16,7 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
   let image = `${SITE}/api/og/${mint}`;
 
   try {
-    const r = await fetch(`https://frontend-api-v3.pump.fun/coins/${mint}`, {
+    const r = await fetch(`https://frontend-api-v3.pump.fun/coins-v2/${mint}`, {
       headers: { "User-Agent": UA, Accept: "application/json" },
       signal: AbortSignal.timeout(8000),
       cache: "no-store",

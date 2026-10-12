@@ -48,7 +48,7 @@ export async function GET(_req: NextRequest, ctx: { params: { mint: string } }) 
   // 3) real market data — pump.fun (mainnet tokens) then DexScreener (graduated)
   let market: any = null;
   try {
-    const r = await fetch(`https://frontend-api-v3.pump.fun/coins/${mint}`, {
+    const r = await fetch(`https://frontend-api-v3.pump.fun/coins-v2/${mint}`, {
       headers: { "User-Agent": UA, Accept: "application/json" },
       signal: AbortSignal.timeout(10000),
       cache: "no-store",
@@ -83,6 +83,10 @@ export async function GET(_req: NextRequest, ctx: { params: { mint: string } }) 
       if (best) {
         market = {
           ...(market ?? { source: "dexscreener" }),
+          name: market?.name ?? best?.baseToken?.name ?? null,
+          symbol: market?.symbol ?? best?.baseToken?.symbol ?? null,
+          image: market?.image ?? best?.info?.imageUrl ?? null,
+          marketCapUsd: market?.marketCapUsd || Number(best.marketCap ?? best.fdv ?? 0),
           dex: {
             dexId: best.dexId,
             pairAddress: best.pairAddress,
