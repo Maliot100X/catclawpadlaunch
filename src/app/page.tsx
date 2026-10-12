@@ -117,14 +117,20 @@ export default function HomePage() {
 
           {forged && (
             <div className="mt-5 border-t border-[var(--line)] pt-4">
-              <p className="kicker">what you get · forged {forged.source}</p>
+              <p className="kicker">what you get · forged {forged.source} · {forged.logoModel === "flux.1-schnell" ? "FLUX real image" : (forged.logoNote ?? "procedural")}</p>
               <div className="mt-3 grid gap-3 grid-cols-[90px_1fr] items-start">
-                <div className="border border-[var(--line)] bg-[#04050c] aspect-square flex items-center justify-center mono text-[10px] text-[var(--muted)]">
-                  {forged.logoStyle} logo
-                </div>
+                {forged.logoUrl ? (
+                  <img src={forged.logoUrl} alt={`${forged.name} logo`} className="border border-[var(--line)] aspect-square w-full object-cover" />
+                ) : (
+                  <div className="border border-[var(--line)] bg-[#04050c] aspect-square flex items-center justify-center mono text-[10px] text-[var(--muted)]">
+                    {forged.logoStyle} logo
+                  </div>
+                )}
                 <div>
-                  <div className="font-bold">{forged.name} <span className="mono text-[var(--lime)]">{forged.ticker}</span></div>
-                  <p className="mt-1 text-xs text-[var(--muted)]">{forged.description}</p>
+                  <input value={forged.name} onChange={e=>setForged({...forged, name: e.target.value})} className="w-full bg-transparent border-b border-[var(--line)] font-bold focus:border-[var(--lime)] outline-none" />
+                  <input value={forged.ticker} onChange={e=>setForged({...forged, ticker: e.target.value})} className="w-full bg-transparent border-b border-[var(--line)] mono text-[var(--lime)] text-sm focus:border-[var(--lime)] outline-none" />
+                  <textarea value={forged.description} onChange={e=>setForged({...forged, description: e.target.value})} rows={3} className="mt-2 w-full bg-transparent text-xs text-[var(--muted)] border border-[var(--line)] p-2 focus:border-[var(--lime)] outline-none" />
+                  <button className="chip mt-2" onClick={forgeNow}>↻ regenerate logo</button>
                   <Link href="/forge" className="btn mt-3 inline-block">edit + launch →</Link>
                 </div>
               </div>
