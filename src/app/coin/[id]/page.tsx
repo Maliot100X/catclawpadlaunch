@@ -6,15 +6,17 @@ export default function CoinPage() {
   const p = useParams<{ id: string }>();
   const id = p?.id ?? "";
   const [coin, setCoin] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetch("/api/coins").then(r=>r.json()).then(j=>{
       const c = (j.coins ?? []).find((x:any)=>String(x.id)===id || x.mint===id);
       setCoin(c ?? null);
-    }).catch(()=>{});
+    }).catch(()=>{}).finally(()=>setLoading(false));
   }, [id]);
 
-  if (!coin) return <div className="panel p-6 mono text-sm text-[var(--muted)]">coin not found · {id}</div>;
+  if (loading) return <div className="panel p-6 mono text-sm text-[var(--muted)]">loading coin {id}…</div>;
+  if (!coin) return <div className="panel p-6 mono text-sm text-[var(--muted)]">coin not found · {id} — <a className="text-[var(--cyan)] underline" href="/coins">browse all coins</a></div>;
 
   return (
     <div className="space-y-8">
