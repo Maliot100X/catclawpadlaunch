@@ -9,6 +9,7 @@ import {
   loadAuthorityKeypair,
 } from "@/lib/solana";
 import { Keypair, LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction, sendAndConfirmTransaction } from "@solana/web3.js";
+import { createFamilyMint } from "@/lib/mint";
 import bs58 from "bs58";
 import { NextRequest } from "next/server";
 
@@ -84,6 +85,27 @@ export async function POST(req: NextRequest) {
       );
     }
     markFunded(fund);
+    // REAL_MINT=1 → create real SPL mint on current cluster (devnet). Else mock id.
+    if (process.env.REAL_MINT === "1") {
+      try {
+        const real = await createFamilyMint({ family: w.family });
+        markLaunched(fund, real.mint);
+        upsertPool({ mint: real.mint, family: w.family, staked: 0, apy: 0, cluster: CLUSTER });
+        return Response.json({
+          ok: true,
+          mock: false,
+          real_spl: true,
+          cluster: CLUSTER,
+          mint: real.mint,
+          signature: real.signature,
+          funded_sol: check.sol,
+          status: "launched",
+          note: "Real SPL mint created on cluster. Pump bonding curve still separate.",
+        });
+      } catch (e) {
+        return Response.json({ ok: false, error: String(e) }, { status: 500 });
+      }
+    }
     const mock = process.env.LAUNCH_MOCK !== "0";
     if (mock) {
       const { mint, signature } = mockPumpCreate(w.family, CLUSTER);
@@ -97,10 +119,10 @@ export async function POST(req: NextRequest) {
         signature,
         funded_sol: check.sol,
         status: "launched",
-        note: "On-chain fund check passed. Pump create mock until LAUNCH_MOCK=0 + pump SDK.",
+        note: "Fund check passed. Set REAL_MINT=1 for on-chain SPL mint.",
       });
     }
-    return Response.json({ error: "wire pump SDK with LAUNCH_MOCK=0" }, { status: 501 });
+    return Response.json({ error: "set REAL_MINT=1 or LAUNCH_MOCK=1" }, { status: 501 });
   }
 
   if (action === "authority_balance") {

@@ -1,39 +1,22 @@
 import "./globals.css";
 import type { Metadata } from "next";
-import { Nav } from "@/components/Nav";
-import { ClusterBadge } from "@/components/ClusterBadge";
 import { Providers } from "@/components/Providers";
 
 export const metadata: Metadata = {
-  title: "CatClawPad — stake models. print intelligence.",
-  description: "Model tokens, LLM credits, OpenAI-compatible API on Solana. CatWithClaw style.",
+  title: "CLAWPAD.wtf — Anything viral becomes intelligence.",
+  description: "Forge coins from trends + model families. LLM credits. Jupiter trade. Solana.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+        <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+      </head>
       <body>
-        <Providers>
-          <div className="mx-auto max-w-5xl px-4 py-6">
-            <header className="mb-6 flex flex-wrap items-end justify-between gap-4 border-b border-claw-border pb-4">
-              <div>
-                <p className="kicker">// catclawpad</p>
-                <h1 className="text-2xl font-bold tracking-tight">
-                  stake models<span className="text-claw-accent">.</span>print intelligence
-                  <span className="text-claw-accent">_</span>
-                </h1>
-                <p className="mt-1 text-sm text-claw-muted">models → credits → real utility · live on solana</p>
-              </div>
-              <ClusterBadge />
-            </header>
-            <Nav />
-            <main className="mt-8">{children}</main>
-            <footer className="mt-16 border-t border-claw-border pt-4 text-xs text-claw-muted">
-              <p>CatClawPad · X @CatWithClawAi · not financial advice</p>
-              <p className="mt-1">cluster is env-driven (devnet default). mainnet only when you set it.</p>
-            </footer>
-          </div>
-        </Providers>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );
