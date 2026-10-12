@@ -56,13 +56,14 @@ export async function GET(_req: NextRequest, ctx: { params: { mint: string } }) 
     if (r.ok) {
       const c = await r.json();
       const mcap = Number(c.usd_market_cap ?? c.market_cap ?? 0);
+      const done = Boolean(c.complete) || mcap >= GRADUATION_MCAP;
       market = {
         source: "pump.fun",
         name: c.name, symbol: c.symbol, image: c.image_uri ?? null,
         description: c.description ?? null,
         marketCapUsd: mcap,
-        complete: Boolean(c.complete),
-        bondingProgressPct: c.complete ? 100 : Math.min(99.9, Math.round((mcap / GRADUATION_MCAP) * 1000) / 10),
+        complete: done,
+        bondingProgressPct: done ? 100 : Math.min(99.9, Math.round((mcap / GRADUATION_MCAP) * 1000) / 10),
         virtualSolReserves: c.virtual_sol_reserves ? c.virtual_sol_reserves / 1e9 : null,
         creator: c.creator ?? null,
         createdAt: c.created_timestamp ?? null,

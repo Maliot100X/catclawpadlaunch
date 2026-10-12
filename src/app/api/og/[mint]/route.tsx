@@ -50,7 +50,8 @@ export async function GET(_req: Request, ctx: { params: { mint: string } }) {
       desc = c.description ?? desc;
       image = image ?? c.image_uri ?? null;
       mcap = Number(c.usd_market_cap ?? c.market_cap ?? 0);
-      curve = c.complete ? 100 : Math.min(99.9, Math.round((mcap / GRADUATION_MCAP) * 1000) / 10);
+      const done = Boolean(c.complete) || mcap >= GRADUATION_MCAP;
+      curve = done ? 100 : Math.min(99.9, Math.round((mcap / GRADUATION_MCAP) * 1000) / 10);
     }
   } catch { /* ignore */ }
 
