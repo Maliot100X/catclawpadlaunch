@@ -100,7 +100,7 @@ export async function GET() {
   }
 
   // Railway
-  checks.railway = { ok: Boolean(process.env.RAILWAY_API_KEY) };
+  checks.railway = { ok: Boolean(process.env.RAILWAY_API_KEY || process.env.RAILWAY_TOKEN) };
 
   const online = Object.values(checks).filter((c: any) => c?.ok).length;
   return Response.json(
