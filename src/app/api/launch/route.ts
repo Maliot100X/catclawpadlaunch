@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { realDevnetLaunch, getPlatformWallet } from "@/lib/launch-real";
+import { markLaunched } from "@/lib/db";
 import { promises as fs } from "fs";
 import path from "path";
 
@@ -32,7 +33,9 @@ export async function POST(req: NextRequest) {
     });
 
     if (res.ok) {
-      // persist LIVE status on the coin record
+      // persist LIVE status on the coin record (Neon first, JSON fallback)
+      await markLaunched(coin.name, res.mint!, res.createSig, res.mintSig, res.explorer);
+
       let coins: any[] = [];
       try { coins = JSON.parse(await fs.readFile(DB, "utf8")); } catch {}
       const target = coins.find((c) => c.name === coin.name && (!c.mint || c.mint === coin.mint));
