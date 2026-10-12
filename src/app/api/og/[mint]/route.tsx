@@ -81,8 +81,8 @@ export async function GET(_req: Request, ctx: { params: { mint: string } }) {
         }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontSize: 26, letterSpacing: 4, color: "#c8ff3d" }}>CLAWPAD.wtf</div>
-          <div style={{ fontSize: 22, color: "#8d93bd" }}>{cluster} · pump.fun data</div>
+          <div style={{ display: "flex", fontSize: 26, letterSpacing: 4, color: "#c8ff3d" }}>CLAWPAD.wtf</div>
+          <div style={{ display: "flex", fontSize: 22, color: "#8d93bd" }}>{`${cluster} · pump.fun data`}</div>
         </div>
 
         <div style={{ display: "flex", gap: 40, marginTop: 40, alignItems: "flex-start" }}>
@@ -96,16 +96,16 @@ export async function GET(_req: Request, ctx: { params: { mint: string } }) {
           )}
 
           <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
-            <div style={{ fontSize: 64, fontWeight: 700, lineHeight: 1.05 }}>{name}</div>
-            <div style={{ fontSize: 40, color: "#c8ff3d", marginTop: 8 }}>{ticker}</div>
-            <div style={{ fontSize: 24, color: "#8d93bd", marginTop: 18, maxWidth: 780 }}>
+            <div style={{ display: "flex", fontSize: 64, fontWeight: 700, lineHeight: 1.05 }}>{name}</div>
+            <div style={{ display: "flex", fontSize: 40, color: "#c8ff3d", marginTop: 8 }}>{ticker}</div>
+            <div style={{ display: "flex", fontSize: 24, color: "#8d93bd", marginTop: 18, maxWidth: 780 }}>
               {(desc || "Live token on catclawpad").slice(0, 140)}
             </div>
 
             <div style={{ display: "flex", gap: 56, marginTop: 30, fontSize: 30 }}>
-              <div>mcap <span style={{ color: "#c8ff3d" }}>{usd(mcap)}</span></div>
-              <div>price <span style={{ color: "#3cf2ff" }}>{price ? `$${price}` : "—"}</span></div>
-              <div>curve <span style={{ color: grad ? "#c8ff3d" : "#3cf2ff" }}>{curve == null ? "—" : `${curve}%`}</span></div>
+              <div style={{ display: "flex", gap: 8 }}><span>mcap</span><span style={{ color: "#c8ff3d" }}>{usd(mcap)}</span></div>
+              <div style={{ display: "flex", gap: 8 }}><span>price</span><span style={{ color: "#3cf2ff" }}>{price ? `$${price}` : "—"}</span></div>
+              <div style={{ display: "flex", gap: 8 }}><span>curve</span><span style={{ color: grad ? "#c8ff3d" : "#3cf2ff" }}>{curve == null ? "—" : `${curve}%`}</span></div>
             </div>
 
             <div style={{ display: "flex", marginTop: 26, width: 620, height: 22, background: "#0b0d18", border: "2px solid #232851" }}>
@@ -115,8 +115,8 @@ export async function GET(_req: Request, ctx: { params: { mint: string } }) {
         </div>
 
         <div style={{ marginTop: "auto", display: "flex", justifyContent: "space-between", fontSize: 22, color: "#8d93bd" }}>
-          <div>anything viral becomes a coin</div>
-          <div>{grad ? "GRADUATED" : "on the curve"}</div>
+          <div style={{ display: "flex" }}>anything viral becomes a coin</div>
+          <div style={{ display: "flex" }}>{grad ? "GRADUATED" : "on the curve"}</div>
         </div>
       </div>
     ),
