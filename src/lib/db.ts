@@ -15,6 +15,7 @@ export type CoinRow = {
   description: string | null;
   tags: string[] | null;
   logo_style: string | null;
+  logo_url: string | null;
   source: string | null;
   status: string;
   create_sig: string | null;
@@ -43,6 +44,7 @@ export async function ensureSchema(): Promise<boolean> {
       description TEXT,
       tags TEXT[],
       logo_style TEXT,
+      logo_url TEXT,
       source TEXT,
       status TEXT NOT NULL DEFAULT 'SIM',
       create_sig TEXT,
@@ -51,6 +53,7 @@ export async function ensureSchema(): Promise<boolean> {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )
   `;
+  await sql`ALTER TABLE coins ADD COLUMN IF NOT EXISTS logo_url TEXT`;
   await sql`CREATE INDEX IF NOT EXISTS coins_created_idx ON coins (created_at DESC)`;
   schemaReady = true;
   return true;
@@ -62,7 +65,7 @@ export async function listCoins(limit = 100): Promise<CoinRow[]> {
   try {
     await ensureSchema();
     const rows = await sql`
-      SELECT id, mint, name, ticker, description, tags, logo_style, source, status,
+      SELECT id, mint, name, ticker, description, tags, logo_style, logo_url, source, status,
              create_sig, mint_sig, explorer, created_at AS when
       FROM coins ORDER BY created_at DESC LIMIT ${limit}
     `;
@@ -74,17 +77,17 @@ export async function listCoins(limit = 100): Promise<CoinRow[]> {
 
 export async function insertCoin(c: {
   name: string; ticker: string; description?: string; tags?: string[];
-  logoStyle?: string; source?: string; mint?: string | null; status?: string;
+  logoStyle?: string; logoUrl?: string | null; source?: string; mint?: string | null; status?: string;
 }): Promise<CoinRow | null> {
   const sql = client();
   if (!sql) return null;
   try {
     await ensureSchema();
     const rows = await sql`
-      INSERT INTO coins (mint, name, ticker, description, tags, logo_style, source, status)
+      INSERT INTO coins (mint, name, ticker, description, tags, logo_style, logo_url, source, status)
       VALUES (${c.mint ?? null}, ${c.name}, ${c.ticker}, ${c.description ?? ""},
-              ${c.tags ?? []}, ${c.logoStyle ?? "auto"}, ${c.source ?? "forge"}, ${c.status ?? "SIM"})
-      RETURNING id, mint, name, ticker, description, tags, logo_style, source, status,
+              ${c.tags ?? []}, ${c.logoStyle ?? "auto"}, ${c.logoUrl ?? null}, ${c.source ?? "forge"}, ${c.status ?? "SIM"})
+      RETURNING id, mint, name, ticker, description, tags, logo_style, logo_url, source, status,
                 create_sig, mint_sig, explorer, created_at AS when
     `;
     return (rows as unknown as CoinRow[])[0] ?? null;

@@ -6,7 +6,7 @@ import { NextRequest } from "next/server";
 export const runtime = "nodejs";
 
 // Real image gen: Pollinations FLUX.1-schnell, key from env only.
-async function fluxLogo(name: string, ticker: string, desc: string, style: string): Promise<{ url: string | null; model: string; creditNote: string }> {
+async function fluxLogo(name: string, ticker: string, desc: string, style: string): Promise<{ url: string | null; hostedUrl?: string | null; model: string; creditNote: string }> {
   const key = process.env.POLLINATIONS_API_KEY;
   const prompt = logoPrompt(name, desc, style);
   if (!key) return { url: null, model: "pending", creditNote: "POLLINATIONS_API_KEY missing — logo slot reserved" };
@@ -26,7 +26,24 @@ async function fluxLogo(name: string, ticker: string, desc: string, style: strin
     const j = await r.json();
     const b64 = j?.data?.[0]?.b64_json;
     if (!b64) return { url: null, model: "flux", creditNote: "no b64 in response" };
-    return { url: `data:image/png;base64,${b64}`, model: "flux.1-schnell", creditNote: "$0.002 pollen" };
+
+    // Host the image so the data URL isn't the only copy: upload to pollinations media,
+    // which returns a stable public URL used in token metadata.
+    let hosted: string | null = j?.data?.[0]?.url ?? null;
+    try {
+      const up = await fetch("https://media.pollinations.ai/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+        body: JSON.stringify({ data: b64, contentType: "image/png", name: `${name.replace(/[^a-z0-9]/gi, "-").toLowerCase()}.png` }),
+        signal: AbortSignal.timeout(20000),
+      });
+      if (up.ok) {
+        const uj = await up.json();
+        hosted = uj?.url ?? hosted;
+      }
+    } catch { /* hosting optional — data URL still returned */ }
+
+    return { url: `data:image/png;base64,${b64}`, hostedUrl: hosted, model: "flux.1-schnell", creditNote: "$0.002 pollen" };
   } catch (e) {
     return { url: null, model: "flux", creditNote: `error ${String(e).slice(0, 60)}` };
   }
@@ -52,5 +69,5 @@ export async function POST(req: NextRequest) {
   const img = wantImage
     ? await fluxLogo(finalCoin.name, finalCoin.ticker, finalCoin.description, finalCoin.logoStyle)
     : { url: null, model: "skipped", creditNote: "image=false" };
-  return Response.json({ ok: true, coin: { ...finalCoin, logoUrl: img.url, logoModel: img.model, logoNote: img.creditNote } });
+  return Response.json({ ok: true, coin: { ...finalCoin, logoUrl: img.url, logoHostedUrl: (img as any).hostedUrl ?? null, logoModel: img.model, logoNote: img.creditNote } });
 }
