@@ -39,6 +39,7 @@ export default function CoinsPage() {
   const [meta, setMeta] = useState<{ scannedAt?: string; source?: string; graduationMcapUsd?: number }>({});
   const [loading, setLoading] = useState(false);
   const [updated, setUpdated] = useState("");
+  const [live, setLive] = useState<any[]>([]);
 
   const load = useCallback(async (b: string) => {
     setLoading(true);
@@ -61,6 +62,26 @@ export default function CoinsPage() {
     fetch("/api/coins").then((r) => r.json()).then((j) => setOurs(j.coins ?? [])).catch(() => {});
   }, []);
 
+  // real-time new-token stream over the PumpDev websocket
+  useEffect(() => {
+    let alive = true;
+    const tick = async () => {
+      try {
+        const r = await fetch("/api/pumpdev?topic=new", { cache: "no-store" });
+        const j = await r.json();
+        if (alive && j?.events?.length) {
+          setLive((prev) => {
+            const seen = new Set(prev.map((x) => x.mint));
+            return [...j.events.filter((e: any) => e.kind === "newToken" && e.mint && !seen.has(e.mint)), ...prev].slice(0, 24);
+          });
+        }
+      } catch { /* ignore */ }
+    };
+    tick();
+    const t = setInterval(tick, 9000);
+    return () => { alive = false; clearInterval(t); };
+  }, []);
+
   const mine = ours.filter((c) => c.mint);
 
   return (
@@ -73,6 +94,25 @@ export default function CoinsPage() {
           Graduation threshold {fmt(meta.graduationMcapUsd ?? 69000)}. Refreshes every 30s.
         </p>
       </div>
+
+      {/* LIVE NEW-TOKEN STREAM */}
+      <section className="panel p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="kicker m-0">live · new launches streaming in (pumpdev websocket)</p>
+          <span className="mono text-[10px] text-[var(--muted)]">{live.length} captured</span>
+        </div>
+        <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+          {live.length === 0 && <span className="mono text-[11px] text-[var(--muted)]">listening for new tokens…</span>}
+          {live.map((e) => (
+            <Link key={e.mint} href={`/coin/${e.mint}`}
+                  className="border border-[var(--line)] px-3 py-2 bg-[#04050c] hover:border-[var(--lime)] whitespace-nowrap">
+              <div className="text-xs font-bold">{e.name ?? "unknown"}</div>
+              <div className="mono text-[10px] text-[var(--lime)]">{e.symbol ?? ""}</div>
+              <div className="mono text-[9px] text-[var(--muted)]">{String(e.mint).slice(0, 6)}… · live</div>
+            </Link>
+          ))}
+        </div>
+      </section>
 
       {/* OUR DEVNET LAUNCHES */}
       <section className="panel p-4">
