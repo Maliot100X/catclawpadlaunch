@@ -2,122 +2,188 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-const MODELS = [
-  { id: "claude", name: "claude sonnet 4", direct: 15, market: 9 },
-  { id: "grok", name: "grok 4", direct: 15, market: 9 },
-  { id: "gpt", name: "gpt-4o", direct: 10, market: 6 },
-  { id: "gemini", name: "gemini 2.5 pro", direct: 10, market: 6 },
-  { id: "deepseek", name: "deepseek v3.1", direct: 1, market: 0.6 },
-];
-
 export default function HomePage() {
-  const [idx, setIdx] = useState(0);
-  const [tab, setTab] = useState<"curl"|"python"|"node">("curl");
-  const [live, setLive] = useState<any>(null);
-  const m = MODELS[idx];
-  const save = Math.round(((m.direct - m.market) / m.direct) * 100);
+  const [trends, setTrends] = useState<{source:string;title:string;heat:number}[]>([]);
+  const [prompt, setPrompt] = useState("");
+  const [style, setStyle] = useState("auto");
+  const [forged, setForged] = useState<any>(null);
+  const [busy, setBusy] = useState(false);
+  const [forgedCount, setForgedCount] = useState<number|null>(null);
+  const [recent, setRecent] = useState<any[]>([]);
 
   useEffect(() => {
-    fetch("/api/launch").then(r=>r.json()).then(setLive).catch(()=>{});
+    fetch("/api/radar").then(r=>r.json()).then(j=>setTrends(j.trends ?? [])).catch(()=>{});
+    fetch("/api/coins").then(r=>r.json()).then(j=>{
+      setForgedCount(j.total ?? null);
+      setRecent((j.coins ?? []).slice(0,5));
+    }).catch(()=>{});
   }, []);
 
-  const snip = {
-    curl: `curl http://13.62.48.15:3100/api/public/v1/chat/completions \\\n  -H "Authorization: Bearer sk-claw-..." \\\n  -H "Content-Type: application/json" \\\n  -d '{"model":"claude","messages":[{"role":"user","content":"gm"}]}'`,
-    python: `import requests\nrequests.post("http://13.62.48.15:3100/api/public/v1/chat/completions",\n  headers={"Authorization":"Bearer sk-claw-..."},\n  json={"model":"claude","messages":[{"role":"user","content":"gm"}]})`,
-    node: `await fetch("/api/public/v1/chat/completions", {\n  method:"POST",\n  headers:{Authorization:"Bearer sk-claw-...","Content-Type":"application/json"},\n  body:JSON.stringify({model:"claude",messages:[{role:"user",content:"gm"}]})\n})`,
-  };
+  async function forgeNow() {
+    if (!prompt.trim()) return;
+    setBusy(true);
+    try {
+      const r = await fetch("/api/forge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, style }),
+      });
+      const j = await r.json();
+      setForged(j.coin);
+    } finally { setBusy(false); }
+  }
+
+  const tape = [...trends, ...trends];
 
   return (
     <div className="space-y-14">
-      <section className="grid gap-8 lg:grid-cols-2 items-center">
+
+      {/* LIVE_ ticker */}
+      <div className="border-y border-[var(--line)] py-2 overflow-hidden whitespace-nowrap mono text-[11px]">
+        <span className="text-[var(--lime)] mr-3">LIVE_</span>
+        {tape.length === 0 && <span className="text-[var(--muted)]">connecting to radar…</span>}
+        {tape.map((t,i)=>(
+          <span key={i} className="mr-6">
+            <span className="text-[var(--lime)]">{t.source}</span>{" "}
+            <span className="text-[var(--muted)]">{t.title}</span>{" "}
+            <span className="text-[var(--cyan)]">{t.heat}</span>
+          </span>
+        ))}
+      </div>
+
+      {/* HERO + FORGE */}
+      <section className="grid gap-10 lg:grid-cols-2 items-start">
         <div>
-          <p className="k mb-4">SOLANA · PUMP.FUN · AI-NATIVE · LLM CREDITS</p>
+          <p className="k mb-4">SOLANA · PUMP.FUN · AI-NATIVE</p>
           <h1 className="h-pixel">
             ANYTHING VIRAL
-            <br />
-            BECOMES
-            <br />
-            <span className="text-[var(--lime)]">INTELLIGENCE.</span>
+            <br />BECOMES A COIN.
           </h1>
           <p className="mt-6 max-w-md text-[var(--muted)] text-[15px]">
-            A prompt, a trend, a model family. AI names it, brands it — you launch. Stake for LLM credits, trade on Jupiter, run agents. Wallet only to launch.
+            A prompt, a post on X, a hashtag, a picture, a TikTok, or whatever the world is
+            googling right now. The AI names it, writes the lore, draws the logo and you
+            launch in one click. You only add the socials.
           </p>
           <div className="mt-7 flex flex-wrap gap-2">
-            <Link href="/launch" className="btn btn-forge">TRY IT FREE →</Link>
-            <Link href="/radar" className="btn">TREND RADAR</Link>
-            <Link href="/trade" className="btn btn-wallet" style={{borderRadius:0}}>TRADE</Link>
+            <Link href="/forge" className="btn btn-forge">try it free →</Link>
+            <Link href="/radar" className="btn">trend radar</Link>
           </div>
           <p className="mt-4 mono text-[11px] text-[var(--muted)] uppercase tracking-wider">
             no wallet needed to forge · wallet only to launch
-            {live?.authority_sol != null && <> · treasury {Number(live.authority_sol).toFixed(2)} SOL</>}
           </p>
+          <div className="mt-8 grid gap-2 mono text-[11px]">
+            {[
+              ["coins forged", forgedCount != null ? String(forgedCount) : "—", "on-chain + simulated"],
+              ["trends tracked", String(trends.length), "sources online"],
+              ["radar", "OFF", "0 scans · live wallet"],
+              ["network", "SOL", "pump.fun · devnet"],
+            ].map(([k,v,s])=>(
+              <div key={k} className="flex gap-3 border border-[var(--line)] bg-[#04050c] px-3 py-2">
+                <span className="text-[var(--muted)] w-28">{k}</span>
+                <span className="text-[var(--lime)] w-12">{v}</span>
+                <span className="text-[var(--muted)]">{s}</span>
+              </div>
+            ))}
+          </div>
         </div>
-        <div className="border border-[var(--line)] bg-[#04050c] p-4 mono text-xs text-[var(--muted)]">forge preview · logo goes here · no 3d</div>
+
+        {/* Forge widget */}
+        <div className="panel p-4">
+          <div className="flex flex-wrap gap-1">
+            {["✦ Prompt","𝕏 X post","# Hashtag","▣ Image","♪ TikTok","▲ Trends"].map((t,i)=>(
+              <span key={t} className={`chip ${i===0?"chip-on":""}`}>{t}</span>
+            ))}
+          </div>
+          <p className="kicker mt-4">input · Prompt</p>
+          <input
+            value={prompt}
+            onChange={e=>setPrompt(e.target.value)}
+            onKeyDown={e=>{ if(e.key==="Enter") forgeNow(); }}
+            placeholder="Describe the coin in one line. AI does the rest."
+            className="mt-2 w-full bg-[#04050c] border border-[var(--line)] p-3 text-sm mono outline-none focus:border-[var(--lime)]"
+          />
+          <div className="mt-2 flex flex-wrap gap-1">
+            {["a cat that refuses to pay taxes, in space","gigachad pigeon running the Federal Reserve","a frog that only trades at 3am","toaster that wants to go to the moon"].map(ex=>(
+              <button key={ex} className="chip" onClick={()=>setPrompt(ex)}>{ex}</button>
+            ))}
+          </div>
+          <p className="kicker mt-4">logo style</p>
+          <div className="mt-2 flex flex-wrap gap-1">
+            {["auto","meme","cartoon","3D","realistic","anime","minimal","pixel"].map(s=>(
+              <button key={s} className={`chip ${style===s.toLowerCase()?"chip-on":""}`} onClick={()=>setStyle(s.toLowerCase())}>{s}</button>
+            ))}
+            <button className="btn ml-auto btn-forge" disabled={busy} onClick={forgeNow}>{busy?"forging…":"forge coin"}</button>
+          </div>
+
+          {forged && (
+            <div className="mt-5 border-t border-[var(--line)] pt-4">
+              <p className="kicker">what you get · forged {forged.source}</p>
+              <div className="mt-3 grid gap-3 grid-cols-[90px_1fr] items-start">
+                <div className="border border-[var(--line)] bg-[#04050c] aspect-square flex items-center justify-center mono text-[10px] text-[var(--muted)]">
+                  {forged.logoStyle} logo
+                </div>
+                <div>
+                  <div className="font-bold">{forged.name} <span className="mono text-[var(--lime)]">{forged.ticker}</span></div>
+                  <p className="mt-1 text-xs text-[var(--muted)]">{forged.description}</p>
+                  <Link href="/forge" className="btn mt-3 inline-block">edit + launch →</Link>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </section>
 
-      <section className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+      {/* recent launches */}
+      <section>
+        <div className="flex items-baseline justify-between">
+          <p className="k">// live from the launchpad</p>
+          <Link href="/coins" className="mono text-[11px] text-[var(--cyan)]">all →</Link>
+        </div>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {recent.length === 0 && (
+            <div className="panel p-4 mono text-xs text-[var(--muted)]">no launches yet — forge the first one</div>
+          )}
+          {recent.map((c)=>(
+            <Link key={c.id} href={`/coin/${c.mint ?? c.id}`} className="panel p-3 hover:border-[var(--lime)]">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-bold">{c.name}</span>
+                <span className="mono text-[var(--lime)] text-xs">{c.ticker}</span>
+              </div>
+              <div className="mono text-[10px] text-[var(--muted)] mt-1">{c.source ?? "forge"} · {c.when ?? ""}</div>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      {/* HOW 01-03 */}
+      <section className="grid gap-4 md:grid-cols-3">
         {[
-          ["AI name + ticker + lore", "Forge brands model families like viral coins"],
-          ["AI logo · meme / 3D", "Neural core preview on every launch"],
-          ["Trend radar · auto heat", "Live tape + social heat → forge"],
-          ["LLM credits + Jupiter", "sk-claw- API · real quotes · agents"],
-        ].map(([t,d]) => (
-          <div key={t} className="card p-4 border-[var(--line)]">
-            <div className="font-semibold text-sm uppercase tracking-wide">{t}</div>
+          ["01","FEED IT","Prompt, X link, hashtag, image, TikTok or a live trend. Any of them."],
+          ["02","AI FORGES","Name, ticker, description, tags and a logo in the style that fits. Edit anything."],
+          ["03","LAUNCH","Connect Phantom, sign once. Metadata goes to IPFS, token goes live on pump.fun."],
+        ].map(([n,t,d])=>(
+          <div key={n} className="card p-5">
+            <div className="h-pixel text-sm text-[var(--lime)]">{n}</div>
+            <div className="mt-2 font-bold uppercase tracking-wide">{t}</div>
             <p className="mt-2 text-xs text-[var(--muted)]">{d}</p>
           </div>
         ))}
       </section>
 
-      <section className="card p-5">
-        <p className="k">// llm pad layer // compare costs / 1M out</p>
-        <div className="mt-3 flex flex-wrap gap-1">
-          {MODELS.map((row,i)=>(
-            <button key={row.id} type="button" className={i===idx?"chip chip-on":"chip"} onClick={()=>setIdx(i)}>{row.name}</button>
-          ))}
-        </div>
-        <div className="mt-5 grid gap-2 sm:grid-cols-4">
-          {[
-            ["Direct", `$${m.direct.toFixed(2)}`],
-            ["Claw market", `$${m.market.toFixed(2)}`],
-            ["Staker", "$0.00"],
-            ["You save", `${save}%`],
-          ].map(([t,v],i)=>(
-            <div key={t} className={`p-4 border border-[var(--line)] ${i===3?"bg-[var(--lime)] text-[#0a0b10]":"bg-[#04050c]"}`}>
-              <div className={`text-[10px] uppercase tracking-wider ${i===3?"text-[#0a0b10]/70":"text-[var(--muted)]"}`}>{t}</div>
-              <div className="mt-1 text-2xl font-bold mono">{v}</div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="card p-5">
-        <p className="k">// the api // one key. every model.</p>
-        <div className="mt-4 grid gap-2 sm:grid-cols-4">
-          {[["01","connect wallet"],["02","get llm credits"],["03","create sk-claw-"],["04","call any model"]].map(([n,t])=>(
-            <div key={n} className="border border-[var(--line)] p-3 bg-[#04050c]">
-              <div className="mono text-[10px] text-[var(--cyan)]">{n}</div>
-              <div className="mt-1 text-sm font-semibold uppercase">{t}</div>
-            </div>
-          ))}
-        </div>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Link href="/api" className="btn btn-forge">[GET KEY]</Link>
-          {(["curl","python","node"] as const).map(t=>(
-            <button key={t} type="button" className={tab===t?"chip chip-on":"chip"} onClick={()=>setTab(t)}>[{t}]</button>
-          ))}
-        </div>
-        <pre className="mt-3 overflow-x-auto border border-[var(--line)] bg-[#04050c] p-4 mono text-[12px] text-[var(--muted)] whitespace-pre-wrap">{snip[tab]}</pre>
-      </section>
-
+      {/* CTA */}
       <section className="border border-[var(--lime)] bg-[#04050c] p-8 text-center">
         <h2 className="h-pixel text-[16px] sm:text-[22px]">GO BRRR_</h2>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
-          <Link href="/launch" className="btn btn-forge">+ FORGE TOKEN</Link>
+          <Link href="/forge" className="btn btn-forge">+ FORGE TOKEN</Link>
           <Link href="/radar" className="btn">RADAR</Link>
-          <Link href="/agents" className="btn">AGENTS</Link>
-          <Link href="/trade" className="btn btn-wallet">TRADE</Link>
+          <Link href="/coins" className="btn">COINS</Link>
         </div>
+      </section>
+
+      {/* Footer disclaimer */}
+      <section className="border-t border-[var(--line)] pt-6 pb-10 mono text-[11px] text-[var(--muted)]">
+        CATCLAWPAD · meme coins are extremely high risk. this tool automates token creation;
+        it does not give financial advice. launch responsibly and only with funds you can afford to lose.
       </section>
     </div>
   );

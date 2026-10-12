@@ -4,14 +4,10 @@ import { usePathname } from "next/navigation";
 import { WalletBar } from "./WalletBar";
 
 const TABS = [
-  { href: "/launch", label: "FORGE" },
+  { href: "/forge", label: "FORGE" },
   { href: "/radar", label: "TREND RADAR" },
-  { href: "/tokens", label: "LAUNCHED" },
+  { href: "/coins", label: "LAUNCHED" },
   { href: "/tokenomics", label: "TOKENOMICS" },
-  { href: "/trade", label: "TRADE" },
-  { href: "/agents", label: "AGENTS" },
-  { href: "/market", label: "MARKET" },
-  { href: "/api", label: "API" },
 ];
 
 export function TopNav() {

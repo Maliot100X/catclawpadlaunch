@@ -1,0 +1,14 @@
+[
+  {
+    "id": 1,
+    "mint": null,
+    "name": "Tax Evader Cat",
+    "ticker": "$TEVAX",
+    "description": "A cat that refuses to pay taxes, in space. Launched thru catclawpad.",
+    "tags": [],
+    "logoStyle": "meme",
+    "source": "prompt",
+    "status": "SIM",
+    "when": "2026-10-12T19:52:29.200Z"
+  }
+]
