@@ -37,6 +37,8 @@ export default function ForgePage() {
   const [forged, setForged] = useState(false);
   const [socials, setSocials] = useState({ website: "", telegram: "", x: "" });
   const [devBuy, setDevBuy] = useState("0.01");
+  const [launching, setLaunching] = useState(false);
+  const [launchRes, setLaunchRes] = useState<any>(null);
 
   const value = tab==="prompt" ? prompt : tab==="x" ? xPost : tab==="hashtag" ? hashtag : tab==="image" ? imageUrl : tiktok;
   const setValue = tab==="prompt" ? setPrompt : tab==="x" ? setXPost : tab==="hashtag" ? setHashtag : tab==="image" ? setImageUrl : setTiktok;
@@ -64,6 +66,29 @@ export default function ForgePage() {
     const ex = EXAMPLES[Math.floor(Math.random()*EXAMPLES.length)];
     setPrompt(ex);
     forgeNow({ prompt: ex });
+  }
+
+  async function launchReal() {
+    if (!result) return;
+    setLaunching(true); setLaunchRes(null);
+    try {
+      // record the coin first, then mint for real on devnet via the platform wallet
+      await fetch("/api/coins", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ coin: { ...result, devBuy, socials } }),
+      });
+      const r = await fetch("/api/launch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ coin: result, devBuy: Number(devBuy) }),
+      });
+      const j = await r.json();
+      setLaunchRes(j);
+      if (j.ok) setForged(true);
+    } catch (e: any) {
+      setLaunchRes({ ok: false, error: String(e?.message ?? e) });
+    } finally { setLaunching(false); }
   }
 
   async function record(dry: boolean) {
@@ -208,10 +233,21 @@ export default function ForgePage() {
                 <button className="btn" disabled={busy || forged} onClick={()=>record(true)}>
                   dry run — record without tx
                 </button>
-                <button className="btn btn-forge opacity-50 cursor-not-allowed" title="Phase 3: Phantom → IPFS → pump.fun devnet">
-                  launch on pump.fun — phase 3
+                <button className="btn btn-forge" disabled={busy || launching} onClick={launchReal}>
+                  {launching ? "launching on devnet…" : "LAUNCH — real devnet mint"}
                 </button>
               </div>
+              {launchRes?.ok && (
+                <div className="mt-3 border border-[var(--lime)] p-3 mono text-[11px] space-y-1">
+                  <div className="text-[var(--lime)]">✓ LIVE on {launchRes.cluster} — real on-chain mint</div>
+                  <div>mint: <a className="text-[var(--cyan)] underline" href={launchRes.explorer} target="_blank" rel="noreferrer">{launchRes.mint}</a></div>
+                  <div className="text-[var(--muted)]">supply {launchRes.supply?.toLocaleString()} · spent {launchRes.spentSol?.toFixed(5)} SOL</div>
+                  <div className="text-[var(--muted)]">create tx: {String(launchRes.createSig).slice(0, 32)}…</div>
+                </div>
+              )}
+              {launchRes && !launchRes.ok && (
+                <p className="mt-2 mono text-[11px] text-[#ff6b9d]">launch failed: {launchRes.error}</p>
+              )}
               {forged && <p className="mono text-[11px] text-[var(--lime)]">✓ recorded to LAUNCHED — see /coins</p>}
             </div>
           </div>

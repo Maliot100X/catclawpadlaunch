@@ -12,3 +12,4 @@ dev-wallets/*.json
 !dev-wallets/.gitkeep
 .env*
 .firecrawl_key
+.data/logos/
