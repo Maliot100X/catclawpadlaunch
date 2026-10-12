@@ -241,7 +241,7 @@ export default function CoinPage() {
             {trades.map((t, i) => (
               <div key={i} className="flex items-center gap-2">
                 <span className={t.txType === "sell" ? "text-[#ff6b9d]" : "text-[var(--lime)]"}>{(t.txType || "?").toUpperCase()}</span>
-                <span className="text-[var(--muted)]">{t.solAmount != null ? Number(t.solAmount).toFixed(3) : "—"} SOL</span>
+                <span className="text-[var(--muted)]">{t.solAmount != null ? (Number(t.solAmount) >= 0.001 ? Number(t.solAmount).toFixed(3) : Number(t.solAmount).toFixed(6)) : "—"} SOL</span>
                 <span className="text-[var(--cyan)]">{t.marketCapSol ? `mc ${Number(t.marketCapSol).toFixed(1)}` : ""}</span>
                 <span className="text-[var(--muted)] truncate">{t.trader ? String(t.trader).slice(0, 4) + "…" : ""}</span>
               </div>
