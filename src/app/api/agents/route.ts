@@ -28,6 +28,8 @@ export async function POST(req: NextRequest) {
       personality: body.personality ? String(body.personality) : undefined,
       fundSol: body.fundSol != null ? Number(body.fundSol) : undefined,
       apiKey: body.apiKey ? String(body.apiKey) : undefined,
+      // anyone can bring their own wallet; without one the platform wallet funds the agent
+      ownerWallet: body.ownerWallet ? String(body.ownerWallet).trim().slice(0, 64) : undefined,
     });
     return Response.json({ ok: true, ...created }, { headers: { "Cache-Control": "no-store" } });
   } catch (e: any) {
