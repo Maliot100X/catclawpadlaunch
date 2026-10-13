@@ -82,8 +82,8 @@ export default function HomePage() {
         <div>
           <p className="k mb-4">SOLANA · PUMP.FUN · AI-NATIVE</p>
           <h1 className="hero-title">
-              ANYTHING VIRAL<br /><span className="grad-lime">BECOMES A COIN.</span>
-            </h1>
+            ANYTHING VIRAL<br /><span className="grad-lime">BECOMES A COIN.</span>
+          </h1>
           <p className="hero-sub mt-6 text-[15px]">
             A prompt, a post on X, a hashtag, a picture, a TikTok, or whatever the world is
             googling right now. The AI names it, writes the lore, draws the logo and you
@@ -99,10 +99,8 @@ export default function HomePage() {
           <div className="mt-8 grid grid-cols-2 gap-2">
             <div className="stat"><div className="k">coins forged</div><div className="v">{stats.total}</div><div className="k">{stats.onChain} on-chain · {stats.sim} sim</div></div>
             <div className="stat"><div className="k">trends tracked</div><div className="v">{trends.length}</div><div className="k">{srcInfo.online ?? 0} sources online</div></div>
-            <div className="stat"><div className="k">network</div><div className="v grad-lime">DEVNET</div><div className="k">real curve + real mints</div></div>
+            <div className="stat"><div className="k">network</div><div className="v grad-lime">DEVNET</div><div className="k">real mints + real curve</div></div>
             <div className="stat"><div className="k">market</div><div className="v">LIVE</div><div className="k">buy / sell on-chain</div></div>
-          </div>
-            ))}
           </div>
         </div>
 
