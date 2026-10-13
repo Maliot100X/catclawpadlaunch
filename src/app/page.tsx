@@ -81,14 +81,13 @@ export default function HomePage() {
       <section className="grid gap-10 lg:grid-cols-2 items-start">
         <div>
           <p className="k mb-4">SOLANA · PUMP.FUN · AI-NATIVE</p>
-          <h1 className="h-pixel">
-            ANYTHING VIRAL
-            <br />BECOMES A COIN.
-          </h1>
-          <p className="mt-6 max-w-md text-[var(--muted)] text-[15px]">
+          <h1 className="hero-title">
+              ANYTHING VIRAL<br /><span className="grad-lime">BECOMES A COIN.</span>
+            </h1>
+          <p className="hero-sub mt-6 text-[15px]">
             A prompt, a post on X, a hashtag, a picture, a TikTok, or whatever the world is
             googling right now. The AI names it, writes the lore, draws the logo and you
-            launch in one click. You only add the socials.
+            launch in one click — then it trades on our own devnet curve.
           </p>
           <div className="mt-7 flex flex-wrap gap-2">
             <Link href="/forge" className="btn btn-forge">try it free →</Link>
@@ -97,18 +96,12 @@ export default function HomePage() {
           <p className="mt-4 mono text-[11px] text-[var(--muted)] uppercase tracking-wider">
             no wallet needed to forge · wallet only to launch
           </p>
-          <div className="mt-8 grid gap-2 mono text-[11px]">
-            {[
-              ["coins forged", String(stats.total), `${stats.onChain} on-chain · ${stats.sim} simulated`],
-              ["trends tracked", String(trends.length), `${srcInfo.online ?? 0} sources online`],
-              ["radar", "OFF", "0 scans · live wallet"],
-              ["network", "SOL", "pump.fun · devnet"],
-            ].map(([k,v,s])=>(
-              <div key={k} className="flex gap-3 border border-[var(--line)] bg-[#04050c] px-3 py-2">
-                <span className="text-[var(--muted)] w-28">{k}</span>
-                <span className="text-[var(--lime)] w-12">{v}</span>
-                <span className="text-[var(--muted)]">{s}</span>
-              </div>
+          <div className="mt-8 grid grid-cols-2 gap-2">
+            <div className="stat"><div className="k">coins forged</div><div className="v">{stats.total}</div><div className="k">{stats.onChain} on-chain · {stats.sim} sim</div></div>
+            <div className="stat"><div className="k">trends tracked</div><div className="v">{trends.length}</div><div className="k">{srcInfo.online ?? 0} sources online</div></div>
+            <div className="stat"><div className="k">network</div><div className="v grad-lime">DEVNET</div><div className="k">real curve + real mints</div></div>
+            <div className="stat"><div className="k">market</div><div className="v">LIVE</div><div className="k">buy / sell on-chain</div></div>
+          </div>
             ))}
           </div>
         </div>

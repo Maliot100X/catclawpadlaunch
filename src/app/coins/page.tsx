@@ -105,7 +105,7 @@ export default function CoinsPage() {
           {live.length === 0 && <span className="mono text-[11px] text-[var(--muted)]">listening for new tokens…</span>}
           {live.map((e) => (
             <Link key={e.mint} href={`/coin/${e.mint}`}
-                  className="border border-[var(--line)] px-3 py-2 bg-[#04050c] hover:border-[var(--lime)] whitespace-nowrap">
+                  className="panel panel-hover px-3 py-2 whitespace-nowrap">
               <div className="text-xs font-bold">{e.name ?? "unknown"}</div>
               <div className="mono text-[10px] text-[var(--lime)]">{e.symbol ?? ""}</div>
               <div className="mono text-[9px] text-[var(--muted)]">{String(e.mint).slice(0, 6)}… · live</div>
@@ -127,7 +127,7 @@ export default function CoinsPage() {
             </div>
           )}
           {mine.map((c) => (
-            <Link key={c.id} href={`/coin/${c.mint}`} className="border border-[var(--line)] p-3 bg-[#04050c] block hover:border-[var(--lime)]">
+            <Link key={c.id} href={`/coin/${c.mint}`} className="panel panel-hover card-link p-3 bg-[#04050c]">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-sm font-bold truncate">{c.name}</span>
                 <span className="mono text-[var(--lime)] text-xs">{c.ticker}</span>
@@ -162,7 +162,7 @@ export default function CoinsPage() {
         {coins.map((c) => {
           const grad = c.complete || c.bondingProgressPct >= 99.9;
           return (
-            <div key={c.mint} className="panel p-3">
+            <div key={c.mint} className="panel panel-hover p-3">
               <Link href={`/coin/${c.mint}`} className="flex items-start justify-between gap-2 hover:opacity-90">
                 <div className="min-w-0">
                   <div className="text-sm font-bold truncate">{c.name}</div>

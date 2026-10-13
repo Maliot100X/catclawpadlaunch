@@ -14,6 +14,13 @@ export default function RadarPage() {
   const [launches, setLaunches] = useState<Launch[]>([]);
   const [whales, setWhales] = useState<Whale[]>([]);
   const [whaleSignal, setWhaleSignal] = useState<string>("");
+  const [symInput, setSymInput] = useState("CATCLAW,PEPE");
+  const [symbols, setSymbols] = useState<any[]>([]);
+  const [walletInput, setWalletInput] = useState("");
+  const [walletInfo, setWalletInfo] = useState<any>(null);
+  const [portfolio, setPortfolio] = useState<any>(null);
+  const [airdrops, setAirdrops] = useState<any>(null);
+  const [threeMsg, setThreeMsg] = useState("");
   const [log, setLog] = useState<string[]>(["radar initialised · sim mode · no wallet"]);
   const [running, setRunning] = useState(false);
   const [interval_, setInterval_] = useState(60);
@@ -39,6 +46,35 @@ export default function RadarPage() {
   }
 
   useEffect(() => { scanNow().catch(()=>{}); }, []);
+
+  async function checkSymbols() {
+    setThreeMsg("checking tickers…");
+    const j = await fetch(`/api/three?kind=symbol&symbols=${encodeURIComponent(symInput)}`, { cache: "no-store" }).then((r) => r.json()).catch(() => null);
+    setSymbols(j?.data?.results ?? []);
+    setThreeMsg(j?.ok ? "ticker check done" : `error: ${j?.error ?? j?.upstreamStatus}`);
+  }
+
+  async function scanWallet() {
+    if (!walletInput.trim()) { setThreeMsg("paste a wallet address"); return; }
+    setThreeMsg("scanning wallet…");
+    const [w, pf, ad] = await Promise.all([
+      fetch(`/api/three?kind=wallet&address=${encodeURIComponent(walletInput)}`, { cache: "no-store" }).then((r) => r.json()).catch(() => null),
+      fetch(`/api/three?kind=portfolio&address=${encodeURIComponent(walletInput)}`, { cache: "no-store" }).then((r) => r.json()).catch(() => null),
+      fetch(`/api/three?kind=airdrops&address=${encodeURIComponent(walletInput)}`, { cache: "no-store" }).then((r) => r.json()).catch(() => null),
+    ]);
+    setWalletInfo(w?.data ?? null);
+    setPortfolio(pf?.data ?? null);
+    setAirdrops(ad?.data ?? null);
+    setThreeMsg("wallet scanned");
+  }
+
+  async function threeify(prompt: string) {
+    setThreeMsg(`queueing 3D build: ${prompt.slice(0, 40)}…`);
+    const j = await fetch("/api/three3d?kind=generate", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt }),
+    }).then((r) => r.json()).catch(() => null);
+    setThreeMsg(j?.ok ? `job #${j.job} queued → open 3D FORGE to watch it build` : `error: ${j?.error}`);
+  }
 
   // real market intelligence from three.ws (keyless)
   useEffect(() => {
@@ -163,12 +199,14 @@ export default function RadarPage() {
           <div className="mt-3 space-y-1 max-h-72 overflow-y-auto mono text-[11px]">
             {hot.length === 0 && <div className="text-[var(--muted)]">loading live momentum…</div>}
             {hot.map((t) => (
-              <a key={t.mint} href={`/coin/${t.mint}`} className="flex items-center gap-2 border-b border-[var(--line)] pb-1 hover:opacity-80">
-                <span className="text-[var(--lime)] w-14 truncate">{t.symbol ?? "?"}</span>
-                <span className="flex-1 truncate text-[var(--muted)]">{t.name}</span>
+              <div key={t.mint} className="flex items-center gap-2 border-b border-[var(--line)] pb-1">
+                <a href={`/coin/${t.mint}`} className="text-[var(--lime)] w-14 truncate">{t.symbol ?? "?"}</a>
+                <a href={`/coin/${t.mint}`} className="flex-1 truncate text-[var(--muted)] hover:text-[var(--fg)]">{t.name}</a>
                 <span className="text-[var(--cyan)]">{t.marketCapUsd ? `$${(t.marketCapUsd / 1e6).toFixed(2)}M` : "—"}</span>
                 <span className="text-[var(--muted)]">score {t.score != null ? Number(t.score).toFixed(0) : "—"}</span>
-              </a>
+                <button className="text-[var(--cyan)] hover:text-[var(--lime)]" title="build a 3D asset from this trend"
+                        onClick={() => threeify(`a chunky collectible 3D figurine of ${t.name} (${t.symbol}) crypto meme mascot`)}>3D</button>
+              </div>
             ))}
           </div>
         </div>
@@ -205,6 +243,72 @@ export default function RadarPage() {
           </div>
         </div>
       </div>
+
+      {/* three.ws utilities */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="panel p-4">
+          <p className="kicker m-0">ticker availability · three.ws</p>
+          <div className="mt-2 flex gap-2">
+            <input value={symInput} onChange={(e) => setSymInput(e.target.value)}
+                   className="flex-1 bg-[#04050c] border border-[var(--line)] p-2 mono text-xs outline-none focus:border-[var(--lime)]" />
+            <button className="chip" onClick={checkSymbols}>check</button>
+          </div>
+          <div className="mt-3 space-y-1 mono text-[11px]">
+            {symbols.length === 0 && <div className="text-[var(--muted)]">check a ticker before you launch it</div>}
+            {symbols.map((r, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <span className={r.available ? "text-[var(--lime)]" : "text-[#ff6b9d]"}>{r.available ? "FREE" : "TAKEN"}</span>
+                <span className="flex-1">{r.symbol}</span>
+                <span className="text-[var(--muted)]">{r.exactCollisions} exact · {r.fuzzyCollisions} fuzzy</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="panel p-4">
+          <p className="kicker m-0">wallet scanner · three.ws</p>
+          <div className="mt-2 flex gap-2">
+            <input value={walletInput} onChange={(e) => setWalletInput(e.target.value)} placeholder="wallet address"
+                   className="flex-1 bg-[#04050c] border border-[var(--line)] p-2 mono text-xs outline-none focus:border-[var(--lime)]" />
+            <button className="chip" onClick={scanWallet}>scan</button>
+          </div>
+          <div className="mt-3 space-y-1 mono text-[11px]">
+            {!walletInfo && <div className="text-[var(--muted)]">balances + portfolio shape, no key needed</div>}
+            {walletInfo && (
+              <>
+                <div className="flex justify-between"><span className="text-[var(--muted)]">native</span><span>{Number(walletInfo.native?.amount ?? 0).toFixed(4)} SOL</span></div>
+                <div className="flex justify-between"><span className="text-[var(--muted)]">tokens</span><span>{walletInfo.tokenCount ?? 0}</span></div>
+                <div className="flex justify-between"><span className="text-[var(--muted)]">value</span><span className="text-[var(--lime)]">${Number(walletInfo.totalUsd ?? 0).toFixed(2)}</span></div>
+              </>
+            )}
+            {portfolio && (
+              <div className="flex justify-between"><span className="text-[var(--muted)]">24h</span>
+                <span className={Number(portfolio.change24h?.pct ?? 0) >= 0 ? "text-[var(--lime)]" : "text-[#ff6b9d]"}>
+                  {Number(portfolio.change24h?.pct ?? 0).toFixed(2)}%
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="panel p-4">
+          <p className="kicker m-0">airdrop eligibility · three.ws</p>
+          <div className="mt-3 space-y-1 mono text-[11px]">
+            {!airdrops && <div className="text-[var(--muted)]">scan a wallet to score it against the live registry</div>}
+            {airdrops && (
+              <>
+                <div className="flex justify-between"><span className="text-[var(--muted)]">tracked</span><span>{airdrops.summary?.tracked ?? 0}</span></div>
+                <div className="flex justify-between"><span className="text-[var(--muted)]">qualified</span><span className="text-[var(--lime)]">{airdrops.summary?.qualified ?? 0}</span></div>
+                <div className="flex justify-between"><span className="text-[var(--muted)]">in progress</span><span className="text-[var(--cyan)]">{airdrops.summary?.in_progress ?? 0}</span></div>
+                {(airdrops.opportunities ?? []).slice(0, 3).map((o: any, i: number) => (
+                  <div key={i} className="text-[var(--muted)]">• {o.name} — {o.eligibility} ({o.score})</div>
+                ))}
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+      {threeMsg && <p className="mono text-[11px] text-[var(--cyan)]">{threeMsg}</p>}
     </div>
   );
 }

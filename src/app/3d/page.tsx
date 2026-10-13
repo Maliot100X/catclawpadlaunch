@@ -26,6 +26,7 @@ export default function ThreeDPage() {
   const [attachMint, setAttachMint] = useState("");
   const [attachMsg, setAttachMsg] = useState("");
   const [diffB, setDiffB] = useState("");
+  const [jobImage, setJobImage] = useState<string | null>(null);
   const [diff, setDiff] = useState<any>(null);
 
   useEffect(() => {
@@ -35,12 +36,13 @@ export default function ThreeDPage() {
 
   const glb = gen?.glbUrl ?? null;
 
-  const poll = useCallback(async (job: string, tries = 12) => {
+  const pollLegacy = useCallback(async (job: string, tries = 12) => {
     for (let i = 0; i < tries; i++) {
       setStatus(`rendering on the GPU lane… (${i + 1}/${tries})`);
       const j = await fetch(`/api/three3d?kind=poll&job=${encodeURIComponent(job)}`, { cache: "no-store" }).then((r) => r.json()).catch(() => null);
       const d = j?.data;
       if (d?.status === "done" && d.glbUrl) { setGen(d); setStatus("model ready — real GLB"); return d; }
+      void pollLegacy;
       if (d?.status === "failed" || d?.error) { setStatus(`generation failed: ${String(d.error ?? d.status)}`); return null; }
       await new Promise((r) => setTimeout(r, 7000));
     }
@@ -50,19 +52,29 @@ export default function ThreeDPage() {
 
   async function generate() {
     if (!prompt.trim()) return;
-    setBusy(true); setStatus("sending prompt to the 3D model lane…"); setGen(null); setInspect(null); setQuote(null); setPrep(null);
+    setBusy(true); setStatus("queueing 3D build…"); setGen(null); setInspect(null); setQuote(null); setPrep(null); setJobImage(null);
     try {
       const j = await fetch("/api/three3d?kind=generate", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt }),
       }).then((r) => r.json());
-      const d = j?.data;
-      if (!j.ok || !d) { setStatus(`error: ${j.error ?? j.upstreamStatus}`); return; }
-      if (d.status === "done" && d.glbUrl) { setGen(d); setStatus("model ready — real GLB"); }
-      else if (d.job) await poll(d.job);
-      else if (d.poll) { const job = String(d.poll).split("job=")[1]; if (job) await poll(job); }
-      else if (d.error) { setGen(d); setStatus(`upstream: ${String(d.error)} — ${String(d.message ?? "")}`); }
-      else { setGen(d); setStatus("check the raw response — unexpected shape"); }
+      if (!j.ok || !j.job) { setStatus(`error: ${j.error ?? "could not queue"}`); return; }
+      setStatus(`job #${j.job} queued · lane ${j.lane}`);
+      for (let i = 0; i < 60; i++) {
+        await new Promise((r) => setTimeout(r, 6000));
+        const s = await fetch(`/api/three3d?kind=job&id=${j.job}`, { cache: "no-store" }).then((r) => r.json()).catch(() => null);
+        const job = s?.job;
+        if (!job) continue;
+        if (job.image_url) setJobImage(job.image_url);
+        if (job.status === "done" && job.glb_url) {
+          setGen({ glbUrl: job.glb_url, source: job.source, bytes: job.bytes });
+          setStatus(`model ready · ${(Number(job.bytes) / 1024 / 1024).toFixed(1)} MB real GLB`);
+          return;
+        }
+        if (job.status === "error") { setStatus(`build failed: ${job.error}`); return; }
+        setStatus(`${job.status} · building your mesh… (${i + 1})`);
+      }
+      setStatus("still building — leave the page open, it shows up under recent builds");
     } finally { setBusy(false); }
   }
 
@@ -165,6 +177,13 @@ export default function ThreeDPage() {
             {/* @ts-expect-error custom element from the model-viewer script */}
             <model-viewer src={glb} alt="generated 3D model" camera-controls auto-rotate
                           style={{ width: "100%", height: 380, background: "#04050c", border: "1px solid var(--line)", marginTop: 12 }} />
+            {jobImage && (
+              <div className="mt-3 flex items-center gap-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={jobImage} alt="source render" className="w-20 h-20 object-cover border border-[var(--line)]" />
+                <span className="mono text-[10px] text-[var(--muted)]">source render (FLUX) → mesh (trellis-2)</span>
+              </div>
+            )}
             <div className="mt-3 flex flex-wrap gap-1">
               <a className="chip chip-on" href={glb} target="_blank" rel="noreferrer">download GLB ↗</a>
               {gen?.viewerUrl && <a className="chip" href={gen.viewerUrl} target="_blank" rel="noreferrer">three.ws viewer ↗</a>}

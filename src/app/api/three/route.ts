@@ -22,6 +22,9 @@ const ALLOWED: Record<string, (p: URLSearchParams) => string> = {
   whales: (p) => `${BASE}/whales?minSol=${encodeURIComponent(p.get("minSol") || "5")}&limit=10`,
   launches: (p) => `${BASE}/launches?limit=${encodeURIComponent(p.get("limit") || "12")}`,
   symbol: (p) => `${BASE}/symbol?symbols=${encodeURIComponent(p.get("symbols") || "")}`,
+  wallet: (p) => `${BASE}/wallet?address=${encodeURIComponent(p.get("address") || "")}`,
+  portfolio: (p) => `${BASE}/portfolio?address=${encodeURIComponent(p.get("address") || "")}&chain=solana`,
+  airdrops: (p) => `${BASE}/airdrops${p.get("address") ? `?address=${encodeURIComponent(p.get("address")!)}` : ""}`,
 };
 
 export async function GET(req: NextRequest) {

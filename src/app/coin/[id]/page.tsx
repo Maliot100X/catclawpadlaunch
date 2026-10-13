@@ -285,11 +285,13 @@ export default function CoinPage() {
           </div>
           {desc && <p className="text-sm text-[var(--muted)] max-w-2xl">{desc}</p>}
 
+          <div className="grid gap-2 grid-cols-2 sm:grid-cols-4">
+            <div className="stat"><div className="k">price</div><div className="v">{d.isOurs ? `${sci(dex?.priceSolPerToken)}` : d.market?.dex?.priceUsd ? `$${d.market.dex.priceUsd}` : "—"}</div><div className="k">{d.isOurs ? "SOL" : "USD"}</div></div>
+            <div className="stat"><div className="k">market cap</div><div className="v">{d.isOurs ? `${(dex?.marketCapSol ?? 0).toFixed(1)}` : usd(d.market?.marketCapUsd)}</div><div className="k">{d.isOurs ? "SOL" : ""}</div></div>
+            <div className="stat"><div className="k">curve</div><div className="v grad-lime">{d.isOurs ? `${dex?.curveProgressPct ?? 0}%` : d.market?.bondingProgressPct != null ? `${d.market.bondingProgressPct}%` : "—"}</div><div className="k">to graduation</div></div>
+            <div className="stat"><div className="k">trades</div><div className="v">{d.isOurs ? `${(dex?.buys ?? 0) + (dex?.sells ?? 0)}` : wsTrades.length ? `${wsTrades.length}+` : "—"}</div><div className="k">{d.isOurs ? `${dex?.buys ?? 0} buy / ${dex?.sells ?? 0} sell` : "live feed"}</div></div>
+          </div>
           <div className="grid gap-1 grid-cols-2 sm:grid-cols-4 mono text-[11px]">
-            <div><span className="text-[var(--muted)]">price </span>{d.isOurs ? `${sci(dex?.priceSolPerToken)} SOL` : d.market?.dex?.priceUsd ? `$${d.market.dex.priceUsd}` : "—"}</div>
-            <div><span className="text-[var(--muted)]">mcap </span>{d.isOurs ? `${(dex?.marketCapSol ?? 0).toFixed(1)} SOL` : usd(d.market?.marketCapUsd)}</div>
-            <div><span className="text-[var(--muted)]">curve </span>{d.isOurs ? `${dex?.curveProgressPct ?? 0}%` : d.market?.bondingProgressPct != null ? `${d.market.bondingProgressPct}%` : "—"}</div>
-            <div><span className="text-[var(--muted)]">trades </span>{d.isOurs ? `${(dex?.buys ?? 0) + (dex?.sells ?? 0)}` : wsTrades.length ? `${wsTrades.length}+ live` : "—"}</div>
             {d.onchain?.supply != null && <div><span className="text-[var(--muted)]">supply </span>{d.onchain.supply.toLocaleString()}</div>}
             <div><span className="text-[var(--muted)]">cluster </span>{d.onchain?.cluster ?? "—"}</div>
             <div><span className="text-[var(--muted)]">mint auth </span>{d.onchain?.mintAuthority ? "active" : "revoked"}</div>
@@ -335,9 +337,7 @@ export default function CoinPage() {
                 <span>bonding curve · {dex?.solCollected?.toFixed(3) ?? 0} / {dex?.graduationSol ?? 85} SOL raised</span>
                 <span className="text-[var(--lime)]">{dex?.curveProgressPct ?? 0}%</span>
               </div>
-              <div className="mt-1 h-2 w-full bg-[#04050c] border border-[var(--line)]">
-                <div className="h-full" style={{ width: `${Math.min(100, dex?.curveProgressPct ?? 0)}%`, background: "var(--lime)" }} />
-              </div>
+              <div className="mt-1 meter"><i style={{ width: `${Math.min(100, dex?.curveProgressPct ?? 0)}%` }} /></div>
               <div className="mt-2 border border-[var(--line)] p-2 bg-[#04050c]">
                 <Spark series={dex?.series ?? []} />
               </div>
