@@ -45,11 +45,13 @@ export function LoginBox() {
       body: JSON.stringify(body),
     }).then((r) => r.json()).catch(() => null);
     if (!j?.ok) { setMsg(`error: ${j?.error ?? "login failed"}`); return; }
-    try { localStorage.setItem(KEY, JSON.stringify({ token: v })); } catch { /* ignore */ }
+    try { localStorage.setItem(KEY, JSON.stringify({ token: v, agentId: j.agentId, name: j.agent?.name ?? null })); } catch { /* ignore */ }
     setSession({ agentId: j.agentId, name: j.agent?.name ?? `agent ${j.agentId}` });
     setMsg("");
     setToken("");
     setOpen(false);
+    // claim that exact profile
+    try { window.location.href = `/agents/${j.agentId}`; } catch { /* ignore */ }
   }
 
   function signOut() {

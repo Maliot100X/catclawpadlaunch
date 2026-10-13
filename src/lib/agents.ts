@@ -110,7 +110,7 @@ export async function listAgents(): Promise<AgentRow[]> {
   const sql = sqlClient();
   if (!sql) return [];
   await ensureAgentSchema(sql);
-  const rows = await sql`SELECT id, name, strategy, personality, pubkey, status, budget_sol, api_key, model_url, avatar_job, owner_wallet, wallet_mode, created_at FROM agents ORDER BY created_at DESC`;
+  const rows = await sql`SELECT id, name, strategy, personality, pubkey, status, budget_sol, api_key, model_url, avatar_job, owner_wallet, wallet_mode, verified, twitter_handle, created_at FROM agents ORDER BY created_at DESC`;
   return rows as unknown as AgentRow[];
 }
 
@@ -118,7 +118,7 @@ export async function getAgent(id: number): Promise<{ agent: AgentRow; activity:
   const sql = sqlClient();
   if (!sql) return null;
   await ensureAgentSchema(sql);
-  const rows = await sql`SELECT id, name, strategy, personality, pubkey, status, budget_sol, api_key, model_url, avatar_job, owner_wallet, wallet_mode, created_at FROM agents WHERE id = ${id}`;
+  const rows = await sql`SELECT id, name, strategy, personality, pubkey, status, budget_sol, api_key, model_url, avatar_job, owner_wallet, wallet_mode, verified, twitter_handle, created_at FROM agents WHERE id = ${id}`;
   const agent = (rows as unknown as AgentRow[])[0];
   if (!agent) return null;
   const activity = await sql`SELECT id, kind, summary, signature, mint, fuel_sol, created_at FROM agent_activity WHERE agent_id = ${id} ORDER BY created_at DESC LIMIT 50`;

@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { THREE_AVATARS, avatarForAgent } from "@/lib/threeAvatars";
 
-type Agent = { id: number; name: string; strategy: string; personality: string | null; pubkey: string; status: string; budget_sol: number; owner_wallet?: string | null; wallet_mode?: string; created_at: string };
+type Agent = { id: number; name: string; strategy: string; personality: string | null; pubkey: string; status: string; budget_sol: number; owner_wallet?: string | null; wallet_mode?: string; verified?: boolean; twitter_handle?: string | null; created_at: string };
 type Act = { id: number; kind: string; summary: string; signature: string | null; mint: string | null; fuel_sol: number | null; created_at: string };
 
 export default function AgentProfile() {
@@ -21,6 +21,18 @@ export default function AgentProfile() {
   const [avatarMsg, setAvatarMsg] = useState("");
   const [holdings, setHoldings] = useState<any[]>([]);
   const [sellMsg, setSellMsg] = useState("");
+  const [owner, setOwner] = useState(false);
+  const [verifyMsg, setVerifyMsg] = useState("");
+
+  // Owner view: the session created by the nav login box claims this exact profile.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("clawpad_agent_session");
+      if (!raw) return;
+      const s = JSON.parse(raw);
+      if (s?.agentId && String(s.agentId) === String(id)) setOwner(true);
+    } catch { /* ignore */ }
+  }, [id]);
 
   const load = useCallback(async () => {
     const j = await fetch(`/api/agents/${id}`, { cache: "no-store" }).then((r) => r.json()).catch(() => null);
@@ -82,6 +94,24 @@ export default function AgentProfile() {
     else setAvatarMsg(`error: ${j?.error ?? "could not attach"}`);
   }
 
+  // Owner: fetch the verification code for this agent and show the ready-made tweet.
+  async function startVerify() {
+    setVerifyMsg("asking for a code…");
+    let token = "";
+    try {
+      const raw = localStorage.getItem("clawpad_agent_session");
+      token = raw ? (JSON.parse(raw)?.token ?? "") : "";
+    } catch { /* ignore */ }
+    if (!token) { setVerifyMsg("log in first (nav login box) so we can authenticate this agent."); return; }
+    const j = await fetch("/api/verify", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      body: JSON.stringify({ action: "start" }),
+    }).then((r) => r.json()).catch(() => null);
+    if (j?.ok) setVerifyMsg(`post this: ${j.example} — then POST the tweet URL to /api/verify {action:"verify"}`);
+    else setVerifyMsg(`error: ${j?.error ?? "could not start verification"}`);
+  }
+
   // Owner-triggered sell: releases part of this agent's position back into the curve, on chain.
   async function sell(mint: string, pct: number) {
     setSellMsg(`selling ${pct}%…`);
@@ -141,6 +171,26 @@ export default function AgentProfile() {
         <p className="mono text-[10px] text-[var(--muted)] mt-2">
           agent wallet {a.pubkey} · created {new Date(a.created_at).toLocaleString()}
         </p>
+      </section>
+
+      {owner && (
+        <section className="panel p-4 border-[var(--lime)]">
+          <p className="kicker m-0">you are logged in as this agent</p>
+          <p className="mono text-[11px] text-[var(--muted)] mt-1">
+            {a.name} · this is your profile. You can run cycles, request funds, sell positions and set the avatar from here.
+          </p>
+        </section>
+      )}
+
+      <section className="panel p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="kicker m-0">x / twitter verification</p>
+          <span className={a.verified ? "mono text-[11px] text-[var(--lime)]" : "mono text-[11px] text-[var(--muted)]"}>
+            {a.verified ? `verified${a.twitter_handle ? ` · @${a.twitter_handle}` : ""}` : "not verified"}
+          </span>
+          <button className="chip" onClick={startVerify}>get my code</button>
+        </div>
+        {verifyMsg && <p className="mono text-[11px] text-[var(--cyan)] mt-2">{verifyMsg}</p>}
       </section>
 
       <section className="panel p-4">
