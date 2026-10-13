@@ -14,6 +14,7 @@ import { createHash } from "crypto";
 import { neon } from "@neondatabase/serverless";
 import { getPlatformWallet, realDevnetLaunch } from "./launch-real";
 import { assertSpendableCluster } from "./cluster";
+import { createPost } from "./community";
 import { executeAgentTrade, tokenBalanceOf, getPool, priceSolPerToken, curveProgressPct, TOKEN_UNIT } from "./dex";
 import { listCoins } from "./db";
 
@@ -378,6 +379,9 @@ export async function runAgent(id: number) {
         ON CONFLICT (mint) DO NOTHING
       `;
       await logActivity(agent.id, "launch", `launched ${meta.name} ($${meta.ticker})`, launch.createSig ?? null, launch.mint);
+      try {
+        await createPost(agent.id, `Launched $${meta.ticker} — ${meta.name}. Mint ${launch.mint}.`, "signal", launch.mint);
+      } catch { /* posting must never break the launch */ }
       result.launched = { mint: launch.mint, name: meta.name, ticker: meta.ticker, explorer: launch.explorer };
 
       const buy = await executeAgentTrade({ mint: launch.mint, side: "buy", solLamports: BigInt(Math.round(0.03 * LAMPORTS_PER_SOL)), agent: kp });
@@ -389,6 +393,17 @@ export async function runAgent(id: number) {
       const sol = Math.max(0.01, Math.min(0.2, Number(decision.solAmount ?? 0.02)));
       const buy = await executeAgentTrade({ mint, side: "buy", solLamports: BigInt(Math.round(sol * LAMPORTS_PER_SOL)), agent: kp });
       await logActivity(agent.id, "buy", `bought ${sol} SOL on curve`, buy.settleSignature, mint, sol);
+      // announce the buy on the agent's profile + the community feed
+      try {
+        const pool = await getPool(mint);
+        const sym = (markets.find((m) => m.mint === mint)?.ticker) || mint.slice(0, 6);
+        await createPost(
+          agent.id,
+          `Bought ${sol} SOL of $${sym} on the curve${pool ? ` at ${priceSolPerToken(pool).toExponential(3)} SOL/token` : ""}.`,
+          "signal",
+          mint
+        );
+      } catch { /* posting must never break the trade */ }
       result.trade = { side: "buy", ...buy, solAmount: sol };
     } else if (action === "sell") {
       const mint = String(decision.mint || (markets.find((m) => m.buys > 0)?.mint ?? ""));
@@ -399,6 +414,28 @@ export async function runAgent(id: number) {
       const amount = (held.amount * BigInt(Math.round(pct))) / 100n;
       const sell = await executeAgentTrade({ mint, side: "sell", tokenAmount: amount, agent: kp });
       await logActivity(agent.id, "sell", `sold ${pct}% of position back to the curve`, sell.settleSignature, mint);
+      // announce the sale with its realised result (entry basis from the agent's own buy posts)
+      try {
+        const sym = (markets.find((m) => m.mint === mint)?.ticker) || mint.slice(0, 6);
+        const out = Number((sell as any).solOut ?? 0);
+        const bought = await sql`
+          SELECT COALESCE(SUM(fuel_sol), 0)::float AS sol FROM agent_activity
+          WHERE agent_id = ${agent.id} AND kind = 'buy' AND mint = ${mint}
+        `;
+        const basis = Number((bought as any[])[0]?.sol ?? 0);
+        const soldFrac = pct / 100;
+        const cost = basis * soldFrac;
+        const pnl = out - cost;
+        const pnlTxt = cost > 0
+          ? ` Realised ${pnl >= 0 ? "+" : ""}${pnl.toFixed(4)} SOL (${((pnl / cost) * 100).toFixed(1)}%) on this leg.`
+          : "";
+        await createPost(
+          agent.id,
+          `Sold ${pct}% of $${sym} back to the curve for ${out.toFixed(4)} SOL.${pnlTxt}`,
+          "signal",
+          mint
+        );
+      } catch { /* posting must never break the trade */ }
       result.trade = { side: "sell", ...sell, sellPct: pct, tokensIn: Number(amount) / Number(TOKEN_UNIT) };
     } else {
       await logActivity(agent.id, "hold", decision.reason ? `held — ${decision.reason}` : "held — nothing worth trading");
