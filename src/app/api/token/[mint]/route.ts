@@ -109,7 +109,7 @@ export async function GET(_req: NextRequest, ctx: { params: { mint: string } }) 
       mint,
       isOurs: Boolean(ours),
       our: ours
-        ? { id: ours.id, name: ours.name, ticker: ours.ticker, description: ours.description, status: ours.status, when: ours.when, logoUrl: ours.logo_url ?? null, explorer: ours.explorer ?? null }
+        ? { id: ours.id, name: ours.name, ticker: ours.ticker, description: ours.description, status: ours.status, when: ours.when, logoUrl: ours.logo_url ?? null, modelUrl: ours.model_url ?? null, explorer: ours.explorer ?? null }
         : null,
       onchain,
       market,
