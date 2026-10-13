@@ -1,0 +1,67 @@
+### three.ws 3D
+200  23148b | {"name":"three.ws 3D API","free":true,"keyless":true,"version":"1.0.0","endpoints":[{"slug
+200  27896b | {"openapi":"3.1.0","info":{"title":"three.ws 3D API","version":"1.0.0","description":"A fr
+200    925b | {"url":"https://three.ws/avatars/cesium-man.glb","valid":true,"stats":{"vertices":3273,"tr
+400    112b | {"error":"missing_url","error_description":"query param \"a\" is required (a public https 
+405     75b | {"error":"method_not_allowed","error_description":"method GET not allowed"}
+200  13692b | {"provider":"three.ws 3D Studio","okxAgentId":2632,"chain":"eip155:196","services":[{"id":
+### three.ws crypto (free, keyless)
+200  20383b | {"name":"three.ws Crypto Data API","free":true,"keyless":true,"version":"1.0.0","endpoints
+200    439b | {"address":"FeMbDoX7R1Psc4GEcvJdsbNbZA3bfztcyDCatJVJpump","chain":"solana","name":"three.w
+200    451b | {"address":"FeMbDoX7R1Psc4GEcvJdsbNbZA3bfztcyDCatJVJpump","chain":"solana","checks":{"mint
+200    797b | {"address":"FeMbDoX7R1Psc4GEcvJdsbNbZA3bfztcyDCatJVJpump","chain":"solana","holderCount":n
+200   1474b | {"launches":[{"mint":"EKkfQ1wzxXAeTFgaKW5MRh2uGQ9mcZncQPAXGKppump","name":"Bear in Depress
+200    263b | {"mint":"FeMbDoX7R1Psc4GEcvJdsbNbZA3bfztcyDCatJVJpump","onCurve":false,"bondingProgressPct
+200    157b | {"scope":"market","mint":null,"whales":[],"whaleCount":0,"totalSolMoved":0,"signal":"neutr
+200   1440b | {"results":[{"symbol":"CLAW","available":false,"stale":false,"exactCollisions":[{"symbol":
+200    275b | {"address":"CMhM6MXVc1cbAWQk3ReC6pKvPy4NEz3gFqXwgDi9ucmm","chain":"solana","native":{"symb
+200    954b | {"window":"1h","tokens":[{"mint":"7jNwX4Me9zGEjmWY7zARDG2LYjVs1WXD6DZ1JvSfpump","symbol":"
+200    712b | {"address":"CMhM6MXVc1cbAWQk3ReC6pKvPy4NEz3gFqXwgDi9ucmm","chain":"solana","totalUsd":0.09
+200   7918b | {"address":"CMhM6MXVc1cbAWQk3ReC6pKvPy4NEz3gFqXwgDi9ucmm","family":"solana","activity":{"f
+### three.ws /api/v1/x (31-endpoint catalog, free tier)
+200  12828b | {"data":{"base_url":"/api/v1/x","billing":{"byok":"send your own upstream key vi
+200    150b | {"data":{"solana":{"usd":106.01}},"_meta":{"provider":"coingecko","endpoint":"pr
+200   2471b | {"data":{"coins":[{"id":"bunker-mode","symbol":"BUNKER","name":"Bunker Mode","ma
+200    153b | {"data":{"tvl_usd":18088996571.740562},"_meta":{"provider":"defillama","endpoint
+200  34723b | {"data":[{"name":"Ethereum","tvl":50437374697.177414,"tokenSymbol":"ETH","chainI
+200    282b | {"data":{"solana:So11111111111111111111111111111111111111112":{"price":105.98524
+200   8487b | {"data":[{"name":"Tether","symbol":"USDT","pegType":"peggedUSD","price":0.999177
+200    273b | {"data":{"7pkqvfHe6WREhvZ1ergfXtz3F6MQfXCfcAZiumCt6Ene":{"price_usd":0.000003914
+200   4876b | {"data":[{"address":"BLDRUyF1cyjZTos4uZoNU81gaHy9Tgah6tsrQqVf1bEa","name":"Clawr
+200    129b | {"data":[],"_meta":{"provider":"dexscreener","endpoint":"token","billing":"free"
+200  11666b | {"data":[{"chainId":"solana","tokenAddress":"CqWt6SUMJuqmt1JVTTadyEpGuvn4AzDN6QF
+200    160b | {"data":{"lamports":890880,"sol":0.00089088},"_meta":{"provider":"solana","endpo
+400     81b | {"error":"missing_param","error_description":"query param \"owner\" is required"
+200    163b | {"data":{"p50":0,"p75":0,"p95":0,"max":0},"_meta":{"provider":"solana","endpoint
+### three.ws MCP Studio (windagents' avatar lane)
+{"jsonrpc":"2.0","id":1,"result":{"tools":[{"name":"forge_free","title":"Generate a 3D model from text","description":"Turn a text prompt into a textured, downloadable 3D model (GLB), free. Describe a single object, character, or creature; the studio generates an interactive model you can rotate, view, and download. Optional quality tier (draft, standard, high); high is slower and may fall back to standard under load. Renders inline in an interactive 3D viewer. Use this for a single object or creature from text; for a posable character call forge_avatar, and to change a model you already made call refine_model.","inputSchema":{"type":"object","additionalProperties":false,"required":["prompt"],"properties":{"idempotency_key":{"type":"string","minLength":1,"maxLength":200,"description":"Optional retry key. Send the same key again (same caller, same arguments, within 24 hours) and you get t{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"Could not generate the model right now. Please try again.\nRun receipt (what each stage was expected to do and what it did): https://three.ws/runs/rr_KGZz4JT9Z6gmwyMXm4mE9H"}],"structuredContent":{"error":true,"message":"Could not generate the model right now. Please try again.","receipt":{"id":"rr_KGZz4JT9Z6gmwyMXm4mE9H","outcome":"failed","summary":"Not delivered. 1 stage missed (Mesh). 1 carried by a fallback (Brief).","issues":[{"stage":"brief","label":"Brief","verdict":"recovered","expected":"A director-written brief that frames the whole figure head to toe in a neutral A-pose.","observed":"The fixed full-body brief was appended to the prompt as written.","cause":"The director reply stopped mid-sentence, so it was treated as clipped and set aside. The fixed brief keeps the framing."},{"stage":"mesh","label":"Mesh","--- MCP studio tool names ---
+--- forge_free test ---
+756
+{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"Could not generate the model right now. Please try again.\nRun receipt (what each stage was expected to do and what it did): https://three.ws/runs/rr_J3PFJeyodpnt7fCvXJunnm"}],"structuredContent":{"error":true,"message":"Could not generate the model right now. Please try again.","receipt":{"id":"rr_J3PFJeyodpnt7fCvXJunnm","outcome":"failed","summary":"Not delivered. 1 stage missed (Mesh).","issues":[{"stage":"mesh","label":"Mesh","verdict":"missed","expected":"A textured 3D mesh from the standard tier.","observed":"No mesh was produced.","cause":"Could not generate the model right now. Please try again."}],"url":"https://thr--- search_catalog: avatar ---
+138
+--- catalog: characters ---
+keys: ['ok', 'items', 'matched', 'relaxed', 'total', 'offset', 'next_offset', 'facets', 'generated_at']
+count: 0
+RAW: {"ok": true, "items": [], "matched": 0, "relaxed": false, "total": 0, "offset": 0, "next_offset": null, "facets": {"kinds": {}, "categories": [], "tags": []}, "generated_at": {}}
+total 0 items 0 | 
+total 0 items 0 | 
+total 0 items 0 | 
+total 0 items 0 | 
+total 0 items 0 | 
+### three.ws hosted avatar bodies (windagents' curl-checked list)
+200 model/gltf-binary 748088b
+200 model/gltf-binary 594920b
+200 model/gltf-binary 162852b
+200 model/gltf-binary 799692b
+200 model/gltf-binary 849756b
+404 text/html; charset=utf-8 9417b
+404 text/html; charset=utf-8 9417b
+200 model/gltf-binary 3194848b
+
+### Verified conclusions (2026-10-13, from the AWS box)
+WORKS (built on): /api/crypto/* (11 endpoints, all live), /api/v1/x/* (31-endpoint catalog, live),
+/api/3d/inspect, /api/3d/diff (needs a+b), /api/3d index+openapi, /api/okx/3d/catalog,
+/api/mcp-studio tools/list (15 tools), hosted /avatars/<name>.glb (6 of 8; robotexpressive+soldier 404).
+DOWN UPSTREAM: /api/3d/generate and MCP forge_free/forge_avatar ("Mesh" stage missed, receipts rr_*),
+search_catalog returns 0 items (total:0) — their R2/catalog backend. Not our code.
+NOTE: three.ws data is MAINNET; our treasury is devnet, so their wallet reads show ~0 for it.

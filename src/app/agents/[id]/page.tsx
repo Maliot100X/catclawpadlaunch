@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import { THREE_AVATARS, avatarForAgent } from "@/lib/threeAvatars";
 
 type Agent = { id: number; name: string; strategy: string; personality: string | null; pubkey: string; status: string; budget_sol: number; owner_wallet?: string | null; wallet_mode?: string; created_at: string };
 type Act = { id: number; kind: string; summary: string; signature: string | null; mint: string | null; fuel_sol: number | null; created_at: string };
@@ -67,14 +68,15 @@ export default function AgentProfile() {
     }
   }
 
-  async function attachThreeWs() {
-    setAvatarMsg("attaching a hosted three.ws avatar…");
+  // Real three.ws avatar bodies (see src/lib/threeAvatars.ts — curl-verified).
+  async function attachBody(glb: string) {
+    setAvatarMsg(`attaching three.ws body ${glb.split("/").pop()}…`);
     const j = await fetch(`/api/agents/${id}/avatar`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ src: "https://three.ws/avatars/default.glb" }),
+      body: JSON.stringify({ src: glb }),
     }).then((r) => r.json()).catch(() => null);
-    if (j?.ok && j.modelUrl) { setModelUrl(j.modelUrl); setAvatarMsg("three.ws avatar attached"); }
+    if (j?.ok && j.modelUrl) { setModelUrl(j.modelUrl); setAvatarMsg("three.ws body attached"); }
     else setAvatarMsg(`error: ${j?.error ?? "could not attach"}`);
   }
 
@@ -124,17 +126,25 @@ export default function AgentProfile() {
         <div className="flex flex-wrap items-center gap-2">
           <p className="kicker m-0">3d avatar · three.ws</p>
           <button className="chip chip-on" onClick={buildAvatar}>open three.ws avatar studio</button>
-          <button className="chip" onClick={attachThreeWs}>use hosted three.ws avatar</button>
           {modelUrl && !modelUrl.startsWith("threews:") && <a className="chip" href={modelUrl} target="_blank" rel="noreferrer">download GLB ↗</a>}
         </div>
+        <div className="flex flex-wrap items-center gap-2 mt-2">
+          <span className="mono text-[10px] text-[var(--muted)]">three.ws bodies:</span>
+          {THREE_AVATARS.map((b) => (
+            <button key={b.id} className="chip" onClick={() => attachBody(b.glb)} title={`${(b.bytes / 1024).toFixed(0)} KB`}>
+              {b.label}
+            </button>
+          ))}
+        </div>
         {avatarMsg && <p className="mono text-[11px] text-[var(--cyan)] mt-2">{avatarMsg}</p>}
-        {modelUrl ? (
+        {(() => { const body = modelUrl || avatarForAgent(id).glb; return (
           // @ts-expect-error three.ws custom element ("@three-ws/avatar/viewer" registers <three-ws-viewer>)
-          <three-ws-viewer src={modelUrl} alt={`${a.name} 3D avatar`} background="transparent" ar
+          <three-ws-viewer src={body} alt={`${a.name} 3D avatar`} background="transparent" ar
                            style={{ width: "100%", height: 340, background: "#04050c", border: "1px solid var(--line)", marginTop: 12, display: "block" }} />
-        ) : (
+        ); })()}
+        {!modelUrl && (
           <p className="mono text-[11px] text-[var(--muted)] mt-2">
-            no avatar yet — open the three.ws avatar studio (their creator, exported as a real GLB and pinned to IPFS), or attach a hosted three.ws avatar.
+            showing this agent&apos;s default three.ws body ({avatarForAgent(id).label}) — pick another above, or forge a new one in the three.ws avatar studio.
           </p>
         )}
       </section>
