@@ -63,6 +63,11 @@ async function ensureAgentSchema(sql: any) {
     )
   `;
   await sql`CREATE INDEX IF NOT EXISTS agent_activity_idx ON agent_activity (agent_id, created_at DESC)`;
+  await sql`ALTER TABLE agents ADD COLUMN IF NOT EXISTS token TEXT`;
+  await sql`ALTER TABLE agents ADD COLUMN IF NOT EXISTS owner_wallet TEXT`;
+  await sql`ALTER TABLE agents ADD COLUMN IF NOT EXISTS wallet_mode TEXT DEFAULT 'platform'`;
+  await sql`ALTER TABLE agents ADD COLUMN IF NOT EXISTS skill_md TEXT`;
+  await sql`ALTER TABLE agents ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'api'`;
   ready = true;
 }
 
@@ -96,16 +101,18 @@ export async function getAgent(id: number): Promise<{ agent: AgentRow; activity:
 }
 
 /** Create an agent: derive its wallet and fund it from the treasury (real tx). */
-export async function createAgent(input: { name: string; strategy?: string; personality?: string; fundSol?: number; apiKey?: string }) {
+export async function createAgent(input: { name: string; strategy?: string; personality?: string; fundSol?: number; apiKey?: string; ownerWallet?: string }) {
   const sql = sqlClient();
   if (!sql) throw new Error("database not configured");
   await ensureAgentSchema(sql);
   const { kp, conn } = getPlatformWallet();
   const name = String(input.name || "").trim().slice(0, 40) || `agent-${Date.now()}`;
 
+  const owner = input.ownerWallet ? String(input.ownerWallet) : null;
   const inserted = await sql`
-    INSERT INTO agents (name, strategy, personality, pubkey, budget_sol, api_key)
-    VALUES (${name}, ${input.strategy ?? "launch-and-trade"}, ${input.personality ?? null}, 'pending', 0, ${input.apiKey ?? null})
+    INSERT INTO agents (name, strategy, personality, pubkey, budget_sol, api_key, owner_wallet, wallet_mode)
+    VALUES (${name}, ${input.strategy ?? "launch-and-trade"}, ${input.personality ?? null}, 'pending', 0, ${input.apiKey ?? null},
+            ${owner}, ${owner ? "external" : "platform"})
     RETURNING id
   `;
   const id = Number((inserted as any[])[0].id);
@@ -283,4 +290,25 @@ export async function runAgent(id: number) {
   const after = (await conn.getBalance(kp.publicKey)) / LAMPORTS_PER_SOL;
   result.balanceAfterSol = after;
   return result;
+}
+
+/** Leaderboard: ranked by real on-chain activity, not by promises. */
+export async function leaderboard(limit = 25) {
+  const sql = sqlClient();
+  if (!sql) return [];
+  await ensureAgentSchema(sql);
+  const rows = await sql`
+    SELECT a.id, a.name, a.strategy, a.pubkey, a.owner_wallet, a.wallet_mode, a.budget_sol,
+           (SELECT count(*) FROM devnet_trades t WHERE t.user_wallet = a.pubkey)                          AS trades,
+           (SELECT COALESCE(sum(t.sol_amount), 0) FROM devnet_trades t WHERE t.user_wallet = a.pubkey)     AS sol_volume,
+           (SELECT count(*) FROM devnet_trades t WHERE t.user_wallet = a.pubkey AND t.side = 'buy')        AS buys,
+           (SELECT count(*) FROM devnet_trades t WHERE t.user_wallet = a.pubkey AND t.side = 'sell')       AS sells,
+           (SELECT count(*) FROM coins c WHERE c.source = 'agent' AND c.mint IN
+              (SELECT DISTINCT t.mint FROM devnet_trades t WHERE t.user_wallet = a.pubkey))                AS launched,
+           (SELECT count(*) FROM agent_activity x WHERE x.agent_id = a.id AND x.kind = 'error')            AS errors
+      FROM agents a
+     ORDER BY sol_volume DESC, trades DESC
+     LIMIT ${limit}
+  `;
+  return rows as any[];
 }

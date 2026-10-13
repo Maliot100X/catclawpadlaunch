@@ -20,6 +20,8 @@ export default function AgentsPage() {
   const [fundSol, setFundSol] = useState("0.25");
   const [apiKey, setApiKey] = useState("");
   const [useOwnKey, setUseOwnKey] = useState(false);
+  const [ownerWallet, setOwnerWallet] = useState("");
+  const [board, setBoard] = useState<any[]>([]);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
   const [selected, setSelected] = useState<number | null>(null);
@@ -39,6 +41,13 @@ export default function AgentsPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    const lb = () => fetch("/api/leaderboard", { cache: "no-store" }).then((r) => r.json()).then((j) => setBoard(j.leaderboard ?? [])).catch(() => {});
+    lb();
+    const i = setInterval(lb, 30000);
+    return () => clearInterval(i);
+  }, []);
   useEffect(() => {
     if (selected == null) return;
     loadDetail(selected);
@@ -59,7 +68,7 @@ export default function AgentsPage() {
     try {
       const j = await fetch("/api/agents", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, strategy, personality, fundSol: Number(fundSol), apiKey: useOwnKey && apiKey ? apiKey : undefined }),
+        body: JSON.stringify({ name, strategy, personality, fundSol: Number(fundSol), apiKey: useOwnKey && apiKey ? apiKey : undefined, ownerWallet: ownerWallet.trim() || undefined }),
       }).then((r) => r.json());
       if (!j.ok) { setStatus(`error: ${j.error}`); return; }
       setStatus(`agent live · wallet ${j.pubkey.slice(0, 8)}… funded ${j.budgetSol} SOL`);
@@ -116,6 +125,11 @@ export default function AgentsPage() {
             <input value={personality} onChange={(e) => setPersonality(e.target.value)}
                    className="mt-1 w-full bg-[#04050c] border border-[var(--line)] p-3 mono text-sm outline-none focus:border-[var(--lime)]" />
           </label>
+          <label className="block md:col-span-2">
+            <span className="kicker">use my own wallet (optional — blank funds one for you from the treasury)</span>
+            <input value={ownerWallet} onChange={(e) => setOwnerWallet(e.target.value)} placeholder="your Solana address"
+                   className="mt-1 w-full bg-[#04050c] border border-[var(--line)] p-3 mono text-sm outline-none focus:border-[var(--lime)]" />
+          </label>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -142,7 +156,8 @@ export default function AgentsPage() {
           {agents.map((a) => (
             <div key={a.id} className={`panel p-3 ${selected === a.id ? "border-[var(--lime)]" : ""}`}>
               <div className="flex flex-wrap items-center gap-2">
-                <button className="text-sm font-bold hover:text-[var(--lime)]" onClick={() => setSelected(a.id)}>{a.name}</button>
+                <Link href={`/agents/${a.id}`} className="text-sm font-bold hover:text-[var(--lime)]">{a.name}</Link>
+                <button className="chip" onClick={() => setSelected(a.id)}>activity</button>
                 <span className="chip">{a.strategy}</span>
                 <span className={`chip ${a.status === "active" ? "chip-on" : ""}`}>{a.status}</span>
                 <span className="mono text-[10px] text-[var(--muted)]">{a.budget_sol} SOL · {String(a.pubkey).slice(0, 6)}…</span>
@@ -169,6 +184,24 @@ export default function AgentsPage() {
               <div className="text-[var(--muted)]">balance before {lastRun.balanceSol?.toFixed(4)} → after {lastRun.balanceAfterSol?.toFixed(4)} SOL</div>
             </div>
           )}
+        </section>
+
+        <section className="panel p-4">
+          <div className="flex items-center gap-2">
+            <p className="kicker m-0">leaderboard · live</p>
+            <Link className="chip ml-auto" href="/leaderboard">full board →</Link>
+          </div>
+          <div className="mt-2 space-y-1 mono text-[11px]">
+            {board.length === 0 && <div className="text-[var(--muted)]">no ranked agents yet</div>}
+            {board.slice(0, 6).map((b: any) => (
+              <Link key={b.id} href={`/agents/${b.id}`} className="flex items-center gap-2 border-b border-[var(--line)] pb-1 hover:opacity-80">
+                <span className={b.rank <= 3 ? "text-[var(--lime)] w-5" : "text-[var(--muted)] w-5"}>{b.rank}</span>
+                <span className="flex-1 truncate">{b.name}</span>
+                <span className="text-[var(--cyan)]">{Number(b.solVolume).toFixed(3)} SOL</span>
+                <span className="text-[var(--muted)]">{b.trades} fills</span>
+              </Link>
+            ))}
+          </div>
         </section>
 
         <section className="panel p-4">
