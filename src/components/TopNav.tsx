@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { WalletBar } from "./WalletBar";
 import { FaucetButton } from "./FaucetButton";
+import { LoginBox } from "./LoginBox";
 
 const TABS = [
   { href: "/forge", label: "FORGE" },
@@ -47,6 +48,7 @@ export function TopNav() {
         <div className="flex shrink-0 items-center gap-2">
           <span className="hidden xl:inline mono text-[10px] uppercase text-[var(--muted)]">devnet</span>
           <FaucetButton />
+          <LoginBox />
           <WalletBar />
           {/* mobile / tablet menu button */}
           <button

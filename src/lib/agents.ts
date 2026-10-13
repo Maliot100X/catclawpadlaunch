@@ -28,7 +28,7 @@ export type AgentRow = {
   created_at: string;
 };
 
-function sqlClient() {
+export function sqlClient() {
   const url = process.env.DATABASE_URL;
   if (!url) return null;
   return neon(url);
