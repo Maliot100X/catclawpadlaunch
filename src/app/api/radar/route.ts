@@ -103,11 +103,68 @@ async function redditTrends(): Promise<Trend[]> {
   } catch { return []; }
 }
 
+const TW = "https://three.ws/api";
+async function tw(path: string, ms = 15000): Promise<any | null> {
+  try {
+    const r = await fetch(`${TW}/${path}`, {
+      headers: { accept: "application/json", "user-agent": "catclawpad/1.0" },
+      signal: AbortSignal.timeout(ms),
+      cache: "no-store",
+    });
+    if (!r.ok) return null;
+    return await r.json();
+  } catch { return null; }
+}
+
+/** Real market intelligence from three.ws (keyless): market flow + provider data. */
+async function threeWsBlock() {
+  const [trending, launches, whales, cgTrending, boosts, fees] = await Promise.all([
+    tw("crypto/trending?window=1h&limit=12"),
+    tw("crypto/launches?limit=12"),
+    tw("crypto/whales?minSol=5&limit=8"),
+    tw("v1/x/coingecko/trending"),
+    tw("v1/x/dexscreener/boosts"),
+    tw("v1/x/solana/priority-fees"),
+  ]);
+  const tokens = (trending?.tokens ?? []).map((t: any) => ({
+    mint: t.mint, symbol: t.symbol, name: t.name,
+    mcapUsd: t.marketCapUsd ?? null, volumeUsd: t.volumeUsd ?? null,
+    change: t.change ?? null, score: t.score ?? null, url: t.url ?? null,
+  }));
+  const fresh = (launches?.launches ?? []).map((l: any) => ({
+    mint: l.mint, symbol: l.symbol, name: l.name,
+    ageMin: l.ageMinutes ?? null, mcapUsd: l.marketCapUsd ?? null,
+    progressPct: l.bondingProgressPct ?? null, dev: l.dev ?? null,
+    imageUrl: l.imageUrl ?? null, url: l.url ?? null,
+  }));
+  const whaleRows = (whales?.whales ?? []).map((w: any) => ({
+    wallet: w.wallet, sol: w.solMoved ?? null, tx: w.txHash ?? null, ts: w.ts ?? null,
+  }));
+  const cg = (cgTrending?.data?.coins ?? []).slice(0, 10).map((c: any) => ({
+    id: c.id, symbol: c.symbol, name: c.name, rank: c.market_cap_rank ?? null, thumb: c.thumb ?? null,
+  }));
+  const boosted = (boosts?.data ?? []).slice(0, 10).map((b: any) => ({
+    chain: b.chainId, address: b.tokenAddress, symbol: (b.description || "").slice(0, 40), url: b.url ?? null,
+  }));
+  const pf = fees?.data ?? null;
+  return {
+    tokens, fresh, whales: whaleRows,
+    whaleSignal: whales?.signal ?? null,
+    whaleTotalSol: whales?.totalSolMoved ?? null,
+    coingeckoTrending: cg,
+    boosted, priorityFees: pf,
+    sources: {
+      trending: tokens.length, launches: fresh.length, whales: whaleRows.length,
+      coingeckoTrending: cg.length, boosts: boosted.length, priorityFees: pf ? 1 : 0,
+    },
+  };
+}
+
 export async function GET() {
   const cached = await cacheGet<any>("clawpad:trends:v1");
   if (cached?.trends?.length) return Response.json({ ...cached, cached: true });
 
-  const [g, b, m, r] = await Promise.all([googleTrends(), blueskyTrends(), mastodonTrends(), redditTrends()]);
+  const [g, b, m, r, three] = await Promise.all([googleTrends(), blueskyTrends(), mastodonTrends(), redditTrends(), threeWsBlock()]);
   const all = [...g, ...b, ...m, ...r];
   const sourcesOnline = [g.length, b.length, m.length, r.length].filter((n) => n > 0).length;
   const trends = all.sort((x, y) => y.heat - x.heat).slice(0, 24);
@@ -120,6 +177,7 @@ export async function GET() {
     sources: { google: g.length, bluesky: b.length, mastodon: m.length, reddit: r.length, online: sourcesOnline },
     counts: { G: bySource("G"), B: bySource("B"), M: bySource("M"), R: bySource("R") },
     trends,
+    three,
     scannedAt: new Date().toISOString(),
     updated: Date.now(),
   };

@@ -30,6 +30,9 @@ export default function RadarPage() {
   const [minHeat, setMinHeat] = useState(35);
   const [saved, setSaved] = useState("");
   const [counts, setCounts] = useState<Record<string, number>>({});
+  const [cgTrending, setCgTrending] = useState<any[]>([]);
+  const [boosted, setBoosted] = useState<any[]>([]);
+  const [fees, setFees] = useState<any>(null);
 
   async function scanNow() {
     setRunning(true);
@@ -40,6 +43,11 @@ export default function RadarPage() {
       setTrends(j.trends ?? []);
       setLog((L) => [`${new Date().toLocaleTimeString()} · scan ok · ${j.trends?.length ?? 0} topics · ${j.sources?.online ?? 0}/4 sources · hottest ${(j.trends ?? [])[0]?.title ?? "—"}`, ...L].slice(0, 20));
       setCounts(j.counts ?? {});
+      if (j.three) {
+        setCgTrending(j.three.coingeckoTrending ?? []);
+        setBoosted(j.three.boosted ?? []);
+        setFees(j.three.priorityFees ?? null);
+      }
     } finally {
       setRunning(false);
     }
@@ -241,6 +249,53 @@ export default function RadarPage() {
               </div>
             ))}
           </div>
+        </div>
+      </div>
+
+      {/* three.ws provider data · CoinGecko · DexScreener · Solana RPC */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="panel p-4">
+          <p className="kicker m-0">coingecko trending · three.ws</p>
+          <div className="mt-2 space-y-1 max-h-64 overflow-y-auto mono text-[11px]">
+            {cgTrending.length === 0 && <div className="text-[var(--muted)]">scan to load…</div>}
+            {cgTrending.map((c) => (
+              <div key={c.id} className="flex items-center gap-2 border-b border-[var(--line)] pb-1">
+                <span className="text-[var(--lime)] w-14 truncate">{c.symbol}</span>
+                <span className="flex-1 truncate text-[var(--muted)]">{c.name}</span>
+                <span className="text-[var(--cyan)]">{c.rank ? `#${c.rank}` : "—"}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="panel p-4">
+          <p className="kicker m-0">dexscreener boosted · three.ws</p>
+          <div className="mt-2 space-y-1 max-h-64 overflow-y-auto mono text-[11px]">
+            {boosted.length === 0 && <div className="text-[var(--muted)]">scan to load…</div>}
+            {boosted.map((b, i) => (
+              <div key={i} className="flex items-center gap-2 border-b border-[var(--line)] pb-1">
+                <span className="text-[var(--cyan)] w-12 truncate">{b.chain}</span>
+                <a className="flex-1 truncate text-[var(--muted)] hover:text-[var(--fg)]" href={`/coin/${b.address}`}>{b.address?.slice(0, 20)}…</a>
+                {b.url && <a className="text-[var(--lime)]" href={b.url} target="_blank" rel="noreferrer">dex ↗</a>}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="panel p-4">
+          <p className="kicker m-0">solana priority fees · three.ws</p>
+          {fees ? (
+            <div className="mt-2 grid grid-cols-2 gap-2 mono text-[11px]">
+              {[["p50", fees.p50], ["p75", fees.p75], ["p95", fees.p95], ["max", fees.max]].map(([k, v]) => (
+                <div key={String(k)} className="border border-[var(--line)] p-2">
+                  <div className="text-[var(--muted)]">{String(k)}</div>
+                  <div className="text-[var(--lime)]">{v != null ? String(v) : "—"} <span className="text-[var(--muted)]">µlamports</span></div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-2 mono text-[11px] text-[var(--muted)]">scan to load…</div>
+          )}
         </div>
       </div>
 
