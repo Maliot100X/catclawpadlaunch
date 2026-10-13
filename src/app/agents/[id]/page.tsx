@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import Script from "next/script";
 
 type Agent = { id: number; name: string; strategy: string; personality: string | null; pubkey: string; status: string; budget_sol: number; owner_wallet?: string | null; wallet_mode?: string; created_at: string };
 type Act = { id: number; kind: string; summary: string; signature: string | null; mint: string | null; fuel_sol: number | null; created_at: string };
@@ -16,12 +17,16 @@ export default function AgentProfile() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [loading, setLoading] = useState(true);
+  const [modelUrl, setModelUrl] = useState<string | null>(null);
+  const [avatarMsg, setAvatarMsg] = useState("");
 
   const load = useCallback(async () => {
     const j = await fetch(`/api/agents/${id}`, { cache: "no-store" }).then((r) => r.json()).catch(() => null);
     if (j?.ok) { setA(j.agent); setActs(j.activity ?? []); }
     const lb = await fetch("/api/leaderboard", { cache: "no-store" }).then((r) => r.json()).catch(() => null);
     if (lb?.ok) setRank((lb.leaderboard ?? []).find((x: any) => String(x.id) === String(id)) ?? null);
+    const av = await fetch(`/api/agents/${id}/avatar`, { cache: "no-store" }).then((r) => r.json()).catch(() => null);
+    if (av?.modelUrl) setModelUrl(av.modelUrl);
     setLoading(false);
   }, [id]);
 
@@ -34,6 +39,20 @@ export default function AgentProfile() {
       setMsg(j?.ok ? `action: ${j.action} — ${j.reason ?? ""}` : `error: ${j?.error ?? j?.reason ?? "unknown"}`);
       await load();
     } finally { setBusy(false); }
+  }
+
+  async function buildAvatar() {
+    setAvatarMsg("queueing a 3D build from this agent's persona…");
+    const j = await fetch(`/api/agents/${id}/avatar`, { method: "POST" }).then((r) => r.json()).catch(() => null);
+    if (!j?.ok) { setAvatarMsg(`error: ${j?.error ?? "could not queue"}`); return; }
+    for (let i = 0; i < 40; i++) {
+      await new Promise((r) => setTimeout(r, 6000));
+      const st = await fetch(`/api/agents/${id}/avatar`, { cache: "no-store" }).then((r) => r.json()).catch(() => null);
+      if (st?.status === "done" && st.modelUrl) { setModelUrl(st.modelUrl); setAvatarMsg(`3D avatar ready · ${(Number(st.bytes) / 1024 / 1024).toFixed(1)} MB real GLB`); return; }
+      if (st?.status === "error") { setAvatarMsg(`build failed: ${st.error}`); return; }
+      setAvatarMsg(`${st?.status ?? "building"}… rendering the mesh (${i + 1})`);
+    }
+    setAvatarMsg("still building — it appears here when finished");
   }
 
   const trades = acts.filter((x) => x.kind === "buy" || x.kind === "sell");
@@ -76,6 +95,25 @@ export default function AgentProfile() {
         <p className="mono text-[10px] text-[var(--muted)] mt-2">
           agent wallet {a.pubkey} · created {new Date(a.created_at).toLocaleString()}
         </p>
+      </section>
+
+      <Script src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js" type="module" strategy="afterInteractive" />
+      <section className="panel p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="kicker m-0">3d avatar · real glb</p>
+          <button className="chip chip-on" onClick={buildAvatar}>{modelUrl ? "rebuild" : "build 3d avatar"}</button>
+          {modelUrl && <a className="chip" href={modelUrl} target="_blank" rel="noreferrer">download GLB ↗</a>}
+        </div>
+        {avatarMsg && <p className="mono text-[11px] text-[var(--cyan)] mt-2">{avatarMsg}</p>}
+        {modelUrl ? (
+          // @ts-expect-error custom element injected by the model-viewer script
+          <model-viewer src={modelUrl} alt={`${a.name} 3D avatar`} camera-controls auto-rotate
+                        style={{ width: "100%", height: 340, background: "#04050c", border: "1px solid var(--line)", marginTop: 12 } as any} />
+        ) : (
+          <p className="mono text-[11px] text-[var(--muted)] mt-2">
+            no model yet — this builds a real text→3D mesh from the agent&apos;s name and persona (FLUX render → trellis-2 → GLB on our worker).
+          </p>
+        )}
       </section>
 
       <section className="panel p-4">

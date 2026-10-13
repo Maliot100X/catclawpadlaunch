@@ -68,6 +68,8 @@ async function ensureAgentSchema(sql: any) {
   await sql`ALTER TABLE agents ADD COLUMN IF NOT EXISTS wallet_mode TEXT DEFAULT 'platform'`;
   await sql`ALTER TABLE agents ADD COLUMN IF NOT EXISTS skill_md TEXT`;
   await sql`ALTER TABLE agents ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'api'`;
+  await sql`ALTER TABLE agents ADD COLUMN IF NOT EXISTS model_url TEXT`;
+  await sql`ALTER TABLE agents ADD COLUMN IF NOT EXISTS avatar_job INT`;
   ready = true;
 }
 
@@ -79,6 +81,23 @@ export function agentKeypair(agentId: number, name: string): Keypair {
     .update(Buffer.from(kp.secretKey))
     .digest();
   return Keypair.fromSeed(Uint8Array.from(seed));
+}
+
+/** Attach a real GLB (built by the 3D worker from the agent's persona). */
+export async function setAgentModel(id: number, modelUrl: string): Promise<boolean> {
+  const sql = sqlClient();
+  if (!sql) return false;
+  await ensureAgentSchema(sql);
+  await sql`UPDATE agents SET model_url = ${modelUrl} WHERE id = ${id}`;
+  return true;
+}
+
+export async function setAgentAvatarJob(id: number, job: number): Promise<boolean> {
+  const sql = sqlClient();
+  if (!sql) return false;
+  await ensureAgentSchema(sql);
+  await sql`UPDATE agents SET avatar_job = ${job} WHERE id = ${id}`;
+  return true;
 }
 
 export async function listAgents(): Promise<AgentRow[]> {
