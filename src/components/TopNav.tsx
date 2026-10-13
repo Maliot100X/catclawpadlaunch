@@ -15,6 +15,7 @@ const TABS = [
   { href: "/3d", label: "3D FORGE" },
   { href: "/leaderboard", label: "LEADERBOARD" },
   { href: "/docs", label: "DOCS" },
+  { href: "/login", label: "LOGIN" },
   { href: "/trade", label: "TRADE" },
   { href: "/tokenomics", label: "TOKENOMICS" },
 ];
