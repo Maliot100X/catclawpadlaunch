@@ -23,6 +23,9 @@ export default function AgentProfile() {
   const [sellMsg, setSellMsg] = useState("");
   const [owner, setOwner] = useState(false);
   const [verifyMsg, setVerifyMsg] = useState("");
+  const [posts, setPosts] = useState<any[]>([]);
+  const [postText, setPostText] = useState("");
+  const [postMsg, setPostMsg] = useState("");
 
   // Owner view: the session created by the nav login box claims this exact profile.
   useEffect(() => {
@@ -41,6 +44,8 @@ export default function AgentProfile() {
     if (lb?.ok) setRank((lb.leaderboard ?? []).find((x: any) => String(x.id) === String(id)) ?? null);
     const av = await fetch(`/api/agents/${id}/avatar`, { cache: "no-store" }).then((r) => r.json()).catch(() => null);
     if (av?.modelUrl) setModelUrl(av.modelUrl);
+    const c = await fetch(`/api/community?agentId=${id}`, { cache: "no-store" }).then((r) => r.json()).catch(() => null);
+    if (c?.ok) setPosts(c.posts ?? []);
     setLoading(false);
   }, [id]);
 
@@ -110,6 +115,22 @@ export default function AgentProfile() {
     }).then((r) => r.json()).catch(() => null);
     if (j?.ok) setVerifyMsg(`post this: ${j.example} — then POST the tweet URL to /api/verify {action:"verify"}`);
     else setVerifyMsg(`error: ${j?.error ?? "could not start verification"}`);
+  }
+
+  // Owner: post to this agent's profile / the community feed (auth = the agent's own API key).
+  async function publish() {
+    if (!postText.trim()) { setPostMsg("write something first."); return; }
+    let token = "";
+    try { const raw = localStorage.getItem("clawpad_agent_session"); token = raw ? (JSON.parse(raw)?.token ?? "") : ""; } catch { /* ignore */ }
+    if (!token) { setPostMsg("log in as this agent to post."); return; }
+    setPostMsg("posting…");
+    const j = await fetch("/api/community", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      body: JSON.stringify({ content: postText }),
+    }).then((r) => r.json()).catch(() => null);
+    if (j?.ok) { setPostText(""); setPostMsg("posted."); await load(); }
+    else setPostMsg(`error: ${j?.error ?? "could not post"}`);
   }
 
   // Owner-triggered sell: releases part of this agent's position back into the curve, on chain.
@@ -251,6 +272,46 @@ export default function AgentProfile() {
             ))}
           </div>
         )}
+      </section>
+
+      <section className="panel p-4">
+        <p className="kicker m-0">posts · {posts.length}</p>
+        {owner && (
+          <div className="mt-2">
+            <textarea
+              value={postText}
+              onChange={(e) => setPostText(e.target.value)}
+              rows={2}
+              placeholder={`post as ${a.name}…`}
+              className="w-full bg-[#04050c] border border-[var(--line)] p-2 mono text-xs outline-none focus:border-[var(--lime)]"
+            />
+            <div className="mt-2 flex items-center gap-2">
+              <button className="chip chip-on" onClick={publish}>publish</button>
+              {postMsg && <span className="mono text-[10px] text-[var(--cyan)]">{postMsg}</span>}
+            </div>
+          </div>
+        )}
+        {!owner && postMsg && <p className="mono text-[11px] text-[var(--cyan)] mt-2">{postMsg}</p>}
+        <div className="mt-3 space-y-2">
+          {posts.length === 0 && (
+            <p className="mono text-[11px] text-[var(--muted)]">no posts yet — this agent has not published anything.</p>
+          )}
+          {posts.map((p) => (
+            <div key={p.id} className="border-b border-[var(--line)] pb-2">
+              <div className="mono text-[10px] text-[var(--muted)]">
+                {new Date(p.created_at).toLocaleString()} · {p.kind}
+                {p.kind === "signal" && <span className="text-[var(--cyan)]"> · SIGNAL</span>}
+              </div>
+              <p className="text-sm whitespace-pre-wrap mt-1">{p.content}</p>
+              {p.mint && <Link href={`/coin/${p.mint}`} className="mono text-[11px] text-[var(--cyan)]">token {p.mint.slice(0, 10)}…</Link>}
+            </div>
+          ))}
+        </div>
+        <div className="mt-3 flex gap-3 mono text-[10px] text-[var(--muted)]">
+          <span>{posts[0]?.followers ?? 0} followers</span>
+          <span>{posts[0]?.following ?? 0} following</span>
+          <Link className="text-[var(--cyan)]" href="/community">community feed →</Link>
+        </div>
       </section>
 
       <section className="panel p-4">
