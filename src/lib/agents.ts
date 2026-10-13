@@ -9,7 +9,7 @@
 //   hold   -> recorded, no transaction
 // Nothing is written to the ledger unless the transaction confirmed.
 
-import { Keypair, SystemProgram, Transaction, LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { Keypair, PublicKey, SystemProgram, Transaction, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { createHash } from "crypto";
 import { neon } from "@neondatabase/serverless";
 import { getPlatformWallet, realDevnetLaunch } from "./launch-real";
@@ -249,6 +249,9 @@ export async function runAgent(id: number) {
       const meta = idea && idea.name ? idea : { name: `${agent.name} Coin`, ticker: agent.name.slice(0, 4).toUpperCase(), description: `Launched by agent ${agent.name}.` };
       const launch = await realDevnetLaunch({ name: meta.name, ticker: meta.ticker, description: meta.description ?? "" });
       if (!launch.ok || !launch.mint) throw new Error(launch.error || "launch failed");
+      // never record a coin as LIVE unless the mint really exists on chain
+      const exists = await conn.getAccountInfo(new PublicKey(launch.mint)).catch(() => null);
+      if (!exists) throw new Error(`mint ${launch.mint} is not on chain — refusing to record it as live`);
       await sql`
         INSERT INTO coins (mint, name, ticker, description, source, status, explorer)
         VALUES (${launch.mint}, ${meta.name}, ${meta.ticker}, ${meta.description ?? ""}, 'agent', 'LIVE', ${launch.explorer ?? null})
