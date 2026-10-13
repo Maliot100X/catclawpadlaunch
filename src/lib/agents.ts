@@ -13,6 +13,7 @@ import { Keypair, PublicKey, SystemProgram, Transaction, LAMPORTS_PER_SOL } from
 import { createHash } from "crypto";
 import { neon } from "@neondatabase/serverless";
 import { getPlatformWallet, realDevnetLaunch } from "./launch-real";
+import { assertSpendableCluster } from "./cluster";
 import { executeAgentTrade, tokenBalanceOf, getPool, priceSolPerToken, curveProgressPct, TOKEN_UNIT } from "./dex";
 import { listCoins } from "./db";
 
@@ -121,6 +122,7 @@ export async function getAgent(id: number): Promise<{ agent: AgentRow; activity:
 
 /** Create an agent: derive its wallet and fund it from the treasury (real tx). */
 export async function createAgent(input: { name: string; strategy?: string; personality?: string; fundSol?: number; apiKey?: string; ownerWallet?: string }) {
+  assertSpendableCluster("create agent");
   const sql = sqlClient();
   if (!sql) throw new Error("database not configured");
   await ensureAgentSchema(sql);
@@ -173,6 +175,7 @@ export async function createAgent(input: { name: string; strategy?: string; pers
  * Capped so one call can't drain the treasury.
  */
 export async function fundAgent(id: number, requestedSol: number) {
+  assertSpendableCluster("fund agent");
   const sql = sqlClient();
   if (!sql) throw new Error("database not configured");
   await ensureAgentSchema(sql);
@@ -214,6 +217,7 @@ export async function fundAgent(id: number, requestedSol: number) {
  * Sells pct (10-100) of whatever this agent holds of `mint`, back into the curve, on chain.
  */
 export async function sellAgentPosition(id: number, mint: string, pct = 50) {
+  assertSpendableCluster("manual sell");
   const sql = sqlClient();
   if (!sql) throw new Error("database not configured");
   await ensureAgentSchema(sql);
@@ -335,6 +339,7 @@ function fallbackDecision(markets: any[]) {
 
 /** Execute one full decision cycle for an agent. Every trade is real. */
 export async function runAgent(id: number) {
+  assertSpendableCluster("agent cycle");
   const sql = sqlClient();
   if (!sql) throw new Error("database not configured");
   const found = await getAgent(id);

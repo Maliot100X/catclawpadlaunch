@@ -20,6 +20,20 @@ export function isMainnet(): boolean {
   return CLUSTER === "mainnet-beta";
 }
 
+/**
+ * Hard guard for every path that moves money (launch, buy, sell, fund).
+ * This project is devnet-only until someone deliberately flips the switch:
+ * mainnet actions throw unless ALLOW_MAINNET=true is set explicitly in the environment.
+ * Keeps a stray env value from ever touching mainnet by accident.
+ */
+export function assertSpendableCluster(action: string): void {
+  if (isMainnet() && process.env.ALLOW_MAINNET !== "true") {
+    throw new Error(
+      `${action} refused: cluster is mainnet-beta and ALLOW_MAINNET is not "true". This project is devnet/test only.`
+    );
+  }
+}
+
 /** Launch fee box (same math LLMPad shows) — cluster-agnostic SOL amounts */
 export const LAUNCH_FEES = {
   launchFeeSol: 0.05,

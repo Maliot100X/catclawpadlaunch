@@ -1,3 +1,4 @@
+import { assertSpendableCluster } from "./cluster";
 // Real devnet launch: SPL mint via @solana/web3.js + @solana/spl-token.
 // Platform wallet pays. Confirmation uses RPC polling (no websocket) so it works on locked-down hosts.
 
@@ -68,6 +69,7 @@ async function sendPolled(conn: Connection, tx: Transaction, signers: Keypair[])
 
 /** Real SPL token creation on the configured cluster: 1B supply, 9 decimals, all to treasury ATA. */
 export async function realDevnetLaunch(coin: { name: string; ticker: string; description?: string }): Promise<LaunchResult> {
+  assertSpendableCluster("launch");
   const { kp, conn } = getPlatformWallet();
   const cluster = process.env.NEXT_PUBLIC_CLUSTER || "devnet";
   const bal0 = await conn.getBalance(kp.publicKey);

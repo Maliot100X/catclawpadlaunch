@@ -1,3 +1,4 @@
+import { assertSpendableCluster } from "./cluster";
 // Real devnet market — settlement model that works with every wallet.
 //
 // The old flow asked the wallet to co-sign alongside the treasury, and wallets
@@ -165,6 +166,7 @@ function memoIx(orderId: number) {
 
 /** Phase 1 of a buy — the wallet's ONLY signature: pay SOL to the treasury. */
 export async function createBuyOrder(mint: string, solLamports: bigint, userPubkey: string) {
+  assertSpendableCluster("buy");
   const sql = sqlClient();
   if (!sql) throw new Error("database not configured");
   await ensureDexSchema(sql);
@@ -207,6 +209,7 @@ export async function createBuyOrder(mint: string, solLamports: bigint, userPubk
 
 /** Phase 1 of a sell — the wallet's ONLY signature: return tokens to the treasury. */
 export async function createSellOrder(mint: string, tokenAmount: bigint, userPubkey: string) {
+  assertSpendableCluster("sell");
   const sql = sqlClient();
   if (!sql) throw new Error("database not configured");
   await ensureDexSchema(sql);
@@ -408,6 +411,7 @@ export async function priceSeries(mint: string, limit = 60) {
 export async function executeAgentTrade(args: {
   mint: string; side: "buy" | "sell"; solLamports?: bigint; tokenAmount?: bigint; agent: Keypair;
 }) {
+  assertSpendableCluster("agent trade");
   const built = args.side === "buy"
     ? await createBuyOrder(args.mint, args.solLamports ?? 0n, args.agent.publicKey.toBase58())
     : await createSellOrder(args.mint, args.tokenAmount ?? 0n, args.agent.publicKey.toBase58());
