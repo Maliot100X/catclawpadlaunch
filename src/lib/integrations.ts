@@ -82,3 +82,29 @@ export async function pinJsonToIpfs(obj: unknown, name: string): Promise<{ uri: 
     return { uri: `ipfs://${cid}`, gateway: `https://gateway.pinata.cloud/ipfs/${cid}` };
   } catch { return null; }
 }
+
+/** Pin a binary file (e.g. an avatar GLB) to IPFS. Real permanent host, no Pollinations. */
+export async function pinFile(
+  bytes: Uint8Array,
+  name: string,
+  mime = "model/gltf-binary"
+): Promise<{ uri: string; gateway: string } | null> {
+  const jwt = process.env.PINATA_JWT;
+  if (!jwt) return null;
+  try {
+    const form = new FormData();
+    form.append("file", new Blob([bytes as unknown as BlobPart], { type: mime }), name);
+    form.append("pinataMetadata", JSON.stringify({ name }));
+    const r = await fetch("https://api.pinata.cloud/pinning/pinFileToIPFS", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${jwt}` },
+      body: form,
+      signal: AbortSignal.timeout(60000),
+    });
+    if (!r.ok) return null;
+    const j = await r.json();
+    const cid = j?.IpfsHash;
+    if (!cid) return null;
+    return { uri: `ipfs://${cid}`, gateway: `https://gateway.pinata.cloud/ipfs/${cid}` };
+  } catch { return null; }
+}

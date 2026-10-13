@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import Script from "next/script";
 
 type Agent = { id: number; name: string; strategy: string; personality: string | null; pubkey: string; status: string; budget_sol: number; owner_wallet?: string | null; wallet_mode?: string; created_at: string };
 type Act = { id: number; kind: string; summary: string; signature: string | null; mint: string | null; fuel_sol: number | null; created_at: string };
@@ -32,6 +31,11 @@ export default function AgentProfile() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Register the three.ws viewer element through the bundler.
+  useEffect(() => {
+    import("@three-ws/avatar/viewer").catch(() => { /* optional */ });
+  }, []);
+
   async function run() {
     setBusy(true); setMsg("agent is thinking…");
     try {
@@ -41,18 +45,37 @@ export default function AgentProfile() {
     } finally { setBusy(false); }
   }
 
+  // three.ws's own avatar stack: their creator iframe exports a real GLB, which we pin.
   async function buildAvatar() {
-    setAvatarMsg("queueing a 3D build from this agent's persona…");
-    const j = await fetch(`/api/agents/${id}/avatar`, { method: "POST" }).then((r) => r.json()).catch(() => null);
-    if (!j?.ok) { setAvatarMsg(`error: ${j?.error ?? "could not queue"}`); return; }
-    for (let i = 0; i < 40; i++) {
-      await new Promise((r) => setTimeout(r, 6000));
-      const st = await fetch(`/api/agents/${id}/avatar`, { cache: "no-store" }).then((r) => r.json()).catch(() => null);
-      if (st?.status === "done" && st.modelUrl) { setModelUrl(st.modelUrl); setAvatarMsg(`3D avatar ready · ${(Number(st.bytes) / 1024 / 1024).toFixed(1)} MB real GLB`); return; }
-      if (st?.status === "error") { setAvatarMsg(`build failed: ${st.error}`); return; }
-      setAvatarMsg(`${st?.status ?? "building"}… rendering the mesh (${i + 1})`);
+    setAvatarMsg("opening the three.ws avatar studio…");
+    try {
+      const mod: any = await import("@three-ws/avatar/creator");
+      const AvatarCreator = mod.AvatarCreator ?? mod.default;
+      const creator = new AvatarCreator({
+        onExport: async (glbBlob: Blob) => {
+          setAvatarMsg(`got a ${(glbBlob.size / 1024 / 1024).toFixed(1)} MB GLB from three.ws — pinning…`);
+          const form = new FormData();
+          form.append("file", glbBlob, `agent-${id}.glb`);
+          const j = await fetch(`/api/agents/${id}/avatar`, { method: "PUT", body: form }).then((r) => r.json()).catch(() => null);
+          if (j?.ok && j.modelUrl) { setModelUrl(j.modelUrl); setAvatarMsg(`avatar saved · ${(glbBlob.size / 1024 / 1024).toFixed(1)} MB real GLB on IPFS`); }
+          else setAvatarMsg(`save failed: ${j?.error ?? "unknown"}`);
+        },
+      });
+      await creator.open();
+    } catch (e: any) {
+      setAvatarMsg(`creator unavailable: ${e?.message ?? e} — use a hosted three.ws avatar instead`);
     }
-    setAvatarMsg("still building — it appears here when finished");
+  }
+
+  async function attachThreeWs() {
+    setAvatarMsg("attaching a hosted three.ws avatar…");
+    const j = await fetch(`/api/agents/${id}/avatar`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ src: "https://three.ws/avatars/default.glb" }),
+    }).then((r) => r.json()).catch(() => null);
+    if (j?.ok && j.modelUrl) { setModelUrl(j.modelUrl); setAvatarMsg("three.ws avatar attached"); }
+    else setAvatarMsg(`error: ${j?.error ?? "could not attach"}`);
   }
 
   const trades = acts.filter((x) => x.kind === "buy" || x.kind === "sell");
@@ -97,21 +120,21 @@ export default function AgentProfile() {
         </p>
       </section>
 
-      <Script src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js" type="module" strategy="afterInteractive" />
       <section className="panel p-4">
         <div className="flex flex-wrap items-center gap-2">
-          <p className="kicker m-0">3d avatar · real glb</p>
-          <button className="chip chip-on" onClick={buildAvatar}>{modelUrl ? "rebuild" : "build 3d avatar"}</button>
-          {modelUrl && <a className="chip" href={modelUrl} target="_blank" rel="noreferrer">download GLB ↗</a>}
+          <p className="kicker m-0">3d avatar · three.ws</p>
+          <button className="chip chip-on" onClick={buildAvatar}>open three.ws avatar studio</button>
+          <button className="chip" onClick={attachThreeWs}>use hosted three.ws avatar</button>
+          {modelUrl && !modelUrl.startsWith("threews:") && <a className="chip" href={modelUrl} target="_blank" rel="noreferrer">download GLB ↗</a>}
         </div>
         {avatarMsg && <p className="mono text-[11px] text-[var(--cyan)] mt-2">{avatarMsg}</p>}
         {modelUrl ? (
-          // @ts-expect-error custom element injected by the model-viewer script
-          <model-viewer src={modelUrl} alt={`${a.name} 3D avatar`} camera-controls auto-rotate
-                        style={{ width: "100%", height: 340, background: "#04050c", border: "1px solid var(--line)", marginTop: 12 } as any} />
+          // @ts-expect-error three.ws custom element ("@three-ws/avatar/viewer" registers <three-ws-viewer>)
+          <three-ws-viewer src={modelUrl} alt={`${a.name} 3D avatar`} background="transparent" ar
+                           style={{ width: "100%", height: 340, background: "#04050c", border: "1px solid var(--line)", marginTop: 12, display: "block" }} />
         ) : (
           <p className="mono text-[11px] text-[var(--muted)] mt-2">
-            no model yet — this builds a real text→3D mesh from the agent&apos;s name and persona (FLUX render → trellis-2 → GLB on our worker).
+            no avatar yet — open the three.ws avatar studio (their creator, exported as a real GLB and pinned to IPFS), or attach a hosted three.ws avatar.
           </p>
         )}
       </section>
