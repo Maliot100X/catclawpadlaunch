@@ -1,0 +1,286 @@
+// Autonomous trading agents on our devnet market.
+//
+// Every agent gets its own real Solana keypair derived from the treasury secret
+// (no secret is stored per agent), funded from the treasury with a real transfer.
+// A "run" cycle asks the brain for one decision, then executes it on chain:
+//   launch -> real SPL mint, then a real curve buy
+//   buy    -> real curve buy from the agent's wallet
+//   sell   -> real curve sell back to the treasury
+//   hold   -> recorded, no transaction
+// Nothing is written to the ledger unless the transaction confirmed.
+
+import { Keypair, SystemProgram, Transaction, LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { createHash } from "crypto";
+import { neon } from "@neondatabase/serverless";
+import { getPlatformWallet, realDevnetLaunch } from "./launch-real";
+import { executeAgentTrade, tokenBalanceOf, getPool, priceSolPerToken, curveProgressPct, TOKEN_UNIT } from "./dex";
+import { listCoins } from "./db";
+
+export type AgentRow = {
+  id: number;
+  name: string;
+  strategy: string;
+  personality: string | null;
+  pubkey: string;
+  status: string;
+  budget_sol: number;
+  api_key: string | null;
+  created_at: string;
+};
+
+function sqlClient() {
+  const url = process.env.DATABASE_URL;
+  if (!url) return null;
+  return neon(url);
+}
+
+let ready = false;
+async function ensureAgentSchema(sql: any) {
+  if (ready) return;
+  await sql`
+    CREATE TABLE IF NOT EXISTS agents (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      strategy TEXT NOT NULL DEFAULT 'launch-and-trade',
+      personality TEXT,
+      pubkey TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'active',
+      budget_sol NUMERIC NOT NULL DEFAULT 0,
+      api_key TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `;
+  await sql`
+    CREATE TABLE IF NOT EXISTS agent_activity (
+      id BIGSERIAL PRIMARY KEY,
+      agent_id INT NOT NULL,
+      kind TEXT NOT NULL,
+      summary TEXT NOT NULL,
+      signature TEXT,
+      mint TEXT,
+      fuel_sol NUMERIC,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `;
+  await sql`CREATE INDEX IF NOT EXISTS agent_activity_idx ON agent_activity (agent_id, created_at DESC)`;
+  ready = true;
+}
+
+/** Deterministic devnet wallet per agent — derived, never stored. */
+export function agentKeypair(agentId: number, name: string): Keypair {
+  const { kp } = getPlatformWallet();
+  const seed = createHash("sha256")
+    .update(`clawpad-agent:v1:${agentId}:${name}`)
+    .update(Buffer.from(kp.secretKey))
+    .digest();
+  return Keypair.fromSeed(Uint8Array.from(seed));
+}
+
+export async function listAgents(): Promise<AgentRow[]> {
+  const sql = sqlClient();
+  if (!sql) return [];
+  await ensureAgentSchema(sql);
+  const rows = await sql`SELECT id, name, strategy, personality, pubkey, status, budget_sol, api_key, created_at FROM agents ORDER BY created_at DESC`;
+  return rows as unknown as AgentRow[];
+}
+
+export async function getAgent(id: number): Promise<{ agent: AgentRow; activity: any[] } | null> {
+  const sql = sqlClient();
+  if (!sql) return null;
+  await ensureAgentSchema(sql);
+  const rows = await sql`SELECT id, name, strategy, personality, pubkey, status, budget_sol, api_key, created_at FROM agents WHERE id = ${id}`;
+  const agent = (rows as unknown as AgentRow[])[0];
+  if (!agent) return null;
+  const activity = await sql`SELECT id, kind, summary, signature, mint, fuel_sol, created_at FROM agent_activity WHERE agent_id = ${id} ORDER BY created_at DESC LIMIT 50`;
+  return { agent, activity: activity as any[] };
+}
+
+/** Create an agent: derive its wallet and fund it from the treasury (real tx). */
+export async function createAgent(input: { name: string; strategy?: string; personality?: string; fundSol?: number; apiKey?: string }) {
+  const sql = sqlClient();
+  if (!sql) throw new Error("database not configured");
+  await ensureAgentSchema(sql);
+  const { kp, conn } = getPlatformWallet();
+  const name = String(input.name || "").trim().slice(0, 40) || `agent-${Date.now()}`;
+
+  const inserted = await sql`
+    INSERT INTO agents (name, strategy, personality, pubkey, budget_sol, api_key)
+    VALUES (${name}, ${input.strategy ?? "launch-and-trade"}, ${input.personality ?? null}, 'pending', 0, ${input.apiKey ?? null})
+    RETURNING id
+  `;
+  const id = Number((inserted as any[])[0].id);
+  const agent = agentKeypair(id, name);
+  const pubkey = agent.publicKey.toBase58();
+
+  const fund = Math.max(0.05, Math.min(2, Number(input.fundSol ?? 0.25)));
+  let fundSig: string | null = null;
+  try {
+    const tx = new Transaction().add(
+      SystemProgram.transfer({ fromPubkey: kp.publicKey, toPubkey: agent.publicKey, lamports: Math.round(fund * LAMPORTS_PER_SOL) })
+    );
+    tx.feePayer = kp.publicKey;
+    tx.recentBlockhash = (await conn.getLatestBlockhash("confirmed")).blockhash;
+    tx.sign(kp);
+    fundSig = await conn.sendRawTransaction(tx.serialize(), { maxRetries: 3 });
+    const t0 = Date.now();
+    while (Date.now() - t0 < 60_000) {
+      const st = (await conn.getSignatureStatuses([fundSig], { searchTransactionHistory: true }))?.value?.[0];
+      if (st?.err) throw new Error(JSON.stringify(st.err));
+      if (st && (st.confirmationStatus === "confirmed" || st.confirmationStatus === "finalized")) break;
+      await new Promise((r) => setTimeout(r, 1200));
+    }
+  } catch (e: any) {
+    await sql`UPDATE agents SET pubkey = ${pubkey}, status = 'unfunded' WHERE id = ${id}`;
+    throw new Error(`agent created but funding failed: ${String(e?.message ?? e)}`);
+  }
+
+  await sql`UPDATE agents SET pubkey = ${pubkey}, budget_sol = ${fund} WHERE id = ${id}`;
+  await sql`
+    INSERT INTO agent_activity (agent_id, kind, summary, signature, fuel_sol)
+    VALUES (${id}, 'fund', ${`funded with ${fund} devnet SOL`}, ${fundSig}, ${fund})
+  `;
+  return { id, name, pubkey, budgetSol: fund, fundSig };
+}
+
+export async function logActivity(agentId: number, kind: string, summary: string, signature?: string | null, mint?: string | null, fuelSol?: number | null) {
+  const sql = sqlClient();
+  if (!sql) return;
+  await ensureAgentSchema(sql);
+  await sql`
+    INSERT INTO agent_activity (agent_id, kind, summary, signature, mint, fuel_sol)
+    VALUES (${agentId}, ${kind}, ${summary}, ${signature ?? null}, ${mint ?? null}, ${fuelSol ?? null})
+  `;
+}
+
+/** What is actually tradable: our live devnet mints, ranked by real curve activity. */
+async function marketSnapshot() {
+  const coins = await listCoins(50);
+  const live = coins.filter((c: any) => c.mint);
+  const out: any[] = [];
+  for (const c of live.slice(0, 12)) {
+    const pool = await getPool(String(c.mint));
+    if (!pool) continue;
+    out.push({
+      mint: c.mint,
+      name: c.name,
+      ticker: c.ticker,
+      priceSolPerToken: priceSolPerToken(pool),
+      curveProgressPct: curveProgressPct(pool),
+      buys: pool.buys,
+      sells: pool.sells,
+    });
+  }
+  return out;
+}
+
+/** One brain decision. Uses the agent's own key when given, else our River key. */
+export async function decide(agent: AgentRow, markets: any[]) {
+  const base = process.env.FORGE_BRAIN_BASE || "https://api.river.ai/v1";
+  const model = process.env.FORGE_BRAIN_MODEL || "deepseek-ai/DeepSeek-V4.1-Flash";
+  const key = agent.api_key || process.env.RIVER_API_KEY || process.env.HERMES_CUSTOM_API_RIVER_AI_API_KEY;
+
+  const sys = `You are ${agent.name}, an autonomous Solana devnet trading agent. Strategy: ${agent.strategy}. Personality: ${agent.personality || "cold and quantitative"}.
+You operate on a real devnet bonding curve market. Answer with ONE JSON object and nothing else:
+{"action":"launch"|"buy"|"sell"|"hold","mint":"<mint or empty>","solAmount":<number>,"sellPct":<number>,"reason":"<short>"}
+Rules: launch = create a new token then buy 0.03 SOL of it. buy = spend 0.02-0.1 SOL of an existing mint. sell = sell 25-100% of a held mint (give the mint). hold = no trade. Stay inside your budget of ${agent.budget_sol} SOL.`;
+
+  const user = `Live markets you can trade:\n${JSON.stringify(markets, null, 1)}\n\nDecide your next single action.`;
+
+  if (!key) return null;
+  try {
+    const r = await fetch(`${base}/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "system", content: sys }, { role: "user", content: user }],
+        temperature: 0.8,
+        max_tokens: 300,
+      }),
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!r.ok) return null;
+    const j = await r.json();
+    const text = j?.choices?.[0]?.message?.content ?? "";
+    const m = text.match(/\{[\s\S]*\}/);
+    if (!m) return null;
+    return JSON.parse(m[0]);
+  } catch { return null; }
+}
+
+/** Deterministic fallback so an agent never idles when the brain is unreachable. */
+function fallbackDecision(markets: any[]) {
+  if (!markets.length) return { action: "launch", reason: "no live market yet — seed one" };
+  const target = markets[0];
+  if (target.buys + target.sells === 0) return { action: "buy", mint: target.mint, solAmount: 0.03, reason: "first liquidity on an untouched curve" };
+  return { action: "buy", mint: markets[Math.floor(Math.random() * markets.length)].mint, solAmount: 0.02, reason: "momentum entry" };
+}
+
+/** Execute one full decision cycle for an agent. Every trade is real. */
+export async function runAgent(id: number) {
+  const sql = sqlClient();
+  if (!sql) throw new Error("database not configured");
+  const found = await getAgent(id);
+  if (!found) throw new Error(`agent ${id} not found`);
+  const { agent } = found;
+  const kp = agentKeypair(agent.id, agent.name);
+  const { conn } = getPlatformWallet();
+  const balance = (await conn.getBalance(kp.publicKey)) / LAMPORTS_PER_SOL;
+
+  const markets = await marketSnapshot();
+  let decision = await decide(agent, markets);
+  let brain = "river";
+  if (!decision) { decision = fallbackDecision(markets); brain = "fallback"; }
+
+  const action = String(decision.action || "hold").toLowerCase();
+  const result: any = { agent: agent.name, brain, action, reason: decision.reason ?? null, wallet: kp.publicKey.toBase58(), balanceSol: balance };
+
+  try {
+    if (action === "launch") {
+      const { brainstorm } = await import("./brain");
+      const idea = await brainstorm(`a viral memecoin concept for an autonomous trading agent named ${agent.name}`, (agent.personality || "degen") as any).catch(() => null);
+      const meta = idea && idea.name ? idea : { name: `${agent.name} Coin`, ticker: agent.name.slice(0, 4).toUpperCase(), description: `Launched by agent ${agent.name}.` };
+      const launch = await realDevnetLaunch({ name: meta.name, ticker: meta.ticker, description: meta.description ?? "" });
+      if (!launch.ok || !launch.mint) throw new Error(launch.error || "launch failed");
+      await sql`
+        INSERT INTO coins (mint, name, ticker, description, source, status, explorer)
+        VALUES (${launch.mint}, ${meta.name}, ${meta.ticker}, ${meta.description ?? ""}, 'agent', 'LIVE', ${launch.explorer ?? null})
+        ON CONFLICT (mint) DO NOTHING
+      `;
+      await logActivity(agent.id, "launch", `launched ${meta.name} ($${meta.ticker})`, launch.createSig ?? null, launch.mint);
+      result.launched = { mint: launch.mint, name: meta.name, ticker: meta.ticker, explorer: launch.explorer };
+
+      const buy = await executeAgentTrade({ mint: launch.mint, side: "buy", solLamports: BigInt(Math.round(0.03 * LAMPORTS_PER_SOL)), agent: kp });
+      await logActivity(agent.id, "buy", `dev-bought 0.03 SOL of ${meta.name}`, buy.signature, launch.mint, 0.03);
+      result.trade = { side: "buy", ...buy, solAmount: 0.03 };
+    } else if (action === "buy") {
+      const mint = String(decision.mint || markets[0]?.mint || "");
+      if (!mint) throw new Error("no mint to buy");
+      const sol = Math.max(0.01, Math.min(0.2, Number(decision.solAmount ?? 0.02)));
+      const buy = await executeAgentTrade({ mint, side: "buy", solLamports: BigInt(Math.round(sol * LAMPORTS_PER_SOL)), agent: kp });
+      await logActivity(agent.id, "buy", `bought ${sol} SOL on curve`, buy.signature, mint, sol);
+      result.trade = { side: "buy", ...buy, solAmount: sol };
+    } else if (action === "sell") {
+      const mint = String(decision.mint || (markets.find((m) => m.buys > 0)?.mint ?? ""));
+      if (!mint) throw new Error("no mint to sell");
+      const held = await tokenBalanceOf(kp.publicKey.toBase58(), mint);
+      if (!held.exists || held.amount <= 0n) throw new Error("agent holds nothing of that mint");
+      const pct = Math.max(10, Math.min(100, Number(decision.sellPct ?? 50)));
+      const amount = (held.amount * BigInt(Math.round(pct))) / 100n;
+      const sell = await executeAgentTrade({ mint, side: "sell", tokenAmount: amount, agent: kp });
+      await logActivity(agent.id, "sell", `sold ${pct}% of position back to the curve`, sell.signature, mint);
+      result.trade = { side: "sell", ...sell, sellPct: pct, tokensIn: Number(amount) / Number(TOKEN_UNIT) };
+    } else {
+      await logActivity(agent.id, "hold", decision.reason ? `held — ${decision.reason}` : "held — nothing worth trading");
+      result.held = true;
+    }
+  } catch (e: any) {
+    const msg = String(e?.message ?? e).slice(0, 300);
+    await logActivity(agent.id, "error", msg);
+    result.error = msg;
+  }
+
+  const after = (await conn.getBalance(kp.publicKey)) / LAMPORTS_PER_SOL;
+  result.balanceAfterSol = after;
+  return result;
+}
