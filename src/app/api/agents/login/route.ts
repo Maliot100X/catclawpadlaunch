@@ -41,15 +41,17 @@ export async function POST(req: NextRequest) {
   );
 }
 
-/** GET /api/agents/login?token=… — convenience check that a token is still valid. */
+/** GET /api/agents/login?token=… or ?claim=… — convenience check that a session is still valid. */
 export async function GET(req: NextRequest) {
   const raw = (req.nextUrl.searchParams.get("token") ?? "").trim();
-  if (!raw) return Response.json({ ok: false, error: "token required" }, { status: 400 });
+  const claim = (req.nextUrl.searchParams.get("claim") ?? "").trim().toUpperCase();
+  if (!raw && !claim) return Response.json({ ok: false, error: "token or claim required" }, { status: 400 });
   const sql = sqlClient();
   if (!sql) return Response.json({ ok: false, error: "database not configured" }, { status: 500 });
-  const hash = createHash("sha256").update(raw).digest("hex");
-  const rows = await sql`SELECT id, name, pubkey, status FROM agents WHERE token = ${hash} LIMIT 1`;
+  const rows = raw
+    ? await sql`SELECT id, name, pubkey, status FROM agents WHERE token = ${createHash("sha256").update(raw).digest("hex")} LIMIT 1`
+    : await sql`SELECT id, name, pubkey, status FROM agents WHERE UPPER(claim_code) = ${claim} LIMIT 1`;
   const agent = (rows as any[])[0];
-  if (!agent) return Response.json({ ok: false, error: "invalid agent token" }, { status: 401 });
+  if (!agent) return Response.json({ ok: false, error: raw ? "invalid agent token" : "invalid claim code" }, { status: 401 });
   return Response.json({ ok: true, agentId: agent.id, agent }, { headers: { "Cache-Control": "no-store" } });
 }

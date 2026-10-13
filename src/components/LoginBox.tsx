@@ -25,8 +25,11 @@ export function LoginBox() {
       if (raw) {
         const s = JSON.parse(raw);
         if (s?.token) {
-          // re-validate on load; a stale session must not look logged in
-          fetch(`/api/agents/login?token=${encodeURIComponent(s.token)}`, { cache: "no-store" })
+          // re-validate on load — understands both a full token and a short claim code
+          const q = /^CLAW-[0-9A-F]{6}$/i.test(s.token)
+            ? `claim=${encodeURIComponent(s.token)}`
+            : `token=${encodeURIComponent(s.token)}`;
+          fetch(`/api/agents/login?${q}`, { cache: "no-store" })
             .then((r) => r.json())
             .then((j) => { if (j?.ok) setSession({ agentId: j.agentId, name: j.agent?.name ?? `agent ${j.agentId}` }); else localStorage.removeItem(KEY); })
             .catch(() => {});
@@ -51,7 +54,7 @@ export function LoginBox() {
     setToken("");
     setOpen(false);
     // claim that exact profile
-    try { window.location.href = `/agents/${j.agentId}`; } catch { /* ignore */ }
+    try { window.location.assign(`/agents/${j.agentId}`); } catch { /* ignore */ }
   }
 
   function signOut() {
