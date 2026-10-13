@@ -3,9 +3,17 @@ import { useEffect, useState } from "react";
 
 type Trend = { source: string; title: string; heat: number; kind: string; url?: string };
 
+type HotTok = { mint: string; symbol?: string; name?: string; marketCapUsd?: number; volumeUsd?: number; change?: number | null; score?: number; url?: string };
+type Launch = { mint: string; name?: string; symbol?: string; ageMinutes?: number; marketCapUsd?: number; bondingProgressPct?: number; graduated?: boolean; url?: string };
+type Whale = { wallet: string; solMoved: number; txHash?: string; ts?: number };
+
 export default function RadarPage() {
   const [status, setStatus] = useState("IDLE");
   const [trends, setTrends] = useState<Trend[]>([]);
+  const [hot, setHot] = useState<HotTok[]>([]);
+  const [launches, setLaunches] = useState<Launch[]>([]);
+  const [whales, setWhales] = useState<Whale[]>([]);
+  const [whaleSignal, setWhaleSignal] = useState<string>("");
   const [log, setLog] = useState<string[]>(["radar initialised · sim mode · no wallet"]);
   const [running, setRunning] = useState(false);
   const [interval_, setInterval_] = useState(60);
@@ -31,6 +39,27 @@ export default function RadarPage() {
   }
 
   useEffect(() => { scanNow().catch(()=>{}); }, []);
+
+  // real market intelligence from three.ws (keyless)
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      try {
+        const [t, l, w] = await Promise.all([
+          fetch("/api/three?kind=trending&window=1h&limit=12", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
+          fetch("/api/three?kind=launches&limit=12", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
+          fetch("/api/three?kind=whales&minSol=5", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
+        ]);
+        if (!alive) return;
+        if (t?.ok && Array.isArray(t.data?.tokens)) setHot(t.data.tokens);
+        if (l?.ok && Array.isArray(l.data?.launches)) setLaunches(l.data.launches);
+        if (w?.ok && w.data) { setWhales(Array.isArray(w.data.whales) ? w.data.whales : []); setWhaleSignal(String(w.data.signal ?? "")); }
+      } catch { /* ignore */ }
+    };
+    load();
+    const t = setInterval(load, 60000);
+    return () => { alive = false; clearInterval(t); };
+  }, []);
 
   return (
     <div className="space-y-8">
@@ -123,6 +152,56 @@ export default function RadarPage() {
               </div>
             ))}
             {trends.length===0 && <div className="mono text-[11px] text-[var(--muted)]">no topics yet — scan now</div>}
+          </div>
+        </div>
+      </div>
+
+      {/* real market intelligence · three.ws */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="panel p-4">
+          <p className="kicker">trending tokens · 1h · three.ws</p>
+          <div className="mt-3 space-y-1 max-h-72 overflow-y-auto mono text-[11px]">
+            {hot.length === 0 && <div className="text-[var(--muted)]">loading live momentum…</div>}
+            {hot.map((t) => (
+              <a key={t.mint} href={`/coin/${t.mint}`} className="flex items-center gap-2 border-b border-[var(--line)] pb-1 hover:opacity-80">
+                <span className="text-[var(--lime)] w-14 truncate">{t.symbol ?? "?"}</span>
+                <span className="flex-1 truncate text-[var(--muted)]">{t.name}</span>
+                <span className="text-[var(--cyan)]">{t.marketCapUsd ? `$${(t.marketCapUsd / 1e6).toFixed(2)}M` : "—"}</span>
+                <span className="text-[var(--muted)]">score {t.score != null ? Number(t.score).toFixed(0) : "—"}</span>
+              </a>
+            ))}
+          </div>
+        </div>
+
+        <div className="panel p-4">
+          <p className="kicker">fresh launches · live curve</p>
+          <div className="mt-3 space-y-1 max-h-72 overflow-y-auto mono text-[11px]">
+            {launches.length === 0 && <div className="text-[var(--muted)]">loading launches…</div>}
+            {launches.map((l) => (
+              <a key={l.mint} href={`/coin/${l.mint}`} className="flex items-center gap-2 border-b border-[var(--line)] pb-1 hover:opacity-80">
+                <span className="text-[var(--lime)] w-14 truncate">{l.symbol ?? "?"}</span>
+                <span className="flex-1 truncate text-[var(--muted)]">{l.name}</span>
+                <span className="text-[var(--muted)]">{l.ageMinutes != null ? `${l.ageMinutes}m` : ""}</span>
+                <span className={l.graduated ? "text-[var(--lime)]" : "text-[var(--cyan)]"}>
+                  {l.graduated ? "GRAD" : `${l.bondingProgressPct != null ? Number(l.bondingProgressPct).toFixed(1) : "0"}%`}
+                </span>
+              </a>
+            ))}
+          </div>
+        </div>
+
+        <div className="panel p-4">
+          <p className="kicker" >whale flow · min 5 SOL</p>
+          <div className="mt-3 space-y-1 max-h-72 overflow-y-auto mono text-[11px]">
+            <div className="text-[var(--muted)]">signal: <span className={whaleSignal === "bullish" ? "text-[var(--lime)]" : "text-[var(--cyan)]"}>{whaleSignal || "neutral"}</span></div>
+            {whales.length === 0 && <div className="text-[var(--muted)]">no large buys in the last window</div>}
+            {whales.map((w, i) => (
+              <div key={i} className="flex items-center gap-2 border-b border-[var(--line)] pb-1">
+                <span className="text-[var(--lime)]">{Number(w.solMoved).toFixed(1)} SOL</span>
+                <span className="flex-1 truncate text-[var(--muted)]">{String(w.wallet).slice(0, 10)}…</span>
+                {w.txHash && <a className="text-[var(--cyan)] underline" target="_blank" rel="noreferrer" href={`https://solscan.io/tx/${w.txHash}`}>tx ↗</a>}
+              </div>
+            ))}
           </div>
         </div>
       </div>

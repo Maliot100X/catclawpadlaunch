@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { listCoins, insertCoin, listCoinsFile, insertCoinFile } from "@/lib/db";
+import { listCoins, insertCoin, listCoinsFile, insertCoinFile, setCoinModel } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,6 +20,7 @@ function toUi(r: any) {
     createSig: r.create_sig ?? r.createSig ?? null,
     mintSig: r.mint_sig ?? r.mintSig ?? null,
     explorer: r.explorer ?? null,
+    modelUrl: r.model_url ?? null,
     when: r.when,
   };
 }
@@ -32,6 +33,16 @@ export async function GET() {
   }
   const fileCoins = await listCoinsFile();
   return Response.json({ ok: true, total: fileCoins.length, store: "file", coins: fileCoins.map(toUi) });
+}
+
+/** Attach or clear a coin's real 3D asset (GLB produced by the 3D Forge). */
+export async function PATCH(req: NextRequest) {
+  const body = await req.json().catch(() => ({}));
+  const mint = String(body?.mint ?? "");
+  const modelUrl = String(body?.modelUrl ?? "");
+  if (!mint || !modelUrl) return Response.json({ ok: false, error: "mint and modelUrl required" }, { status: 400 });
+  const ok = await setCoinModel(mint, modelUrl);
+  return Response.json({ ok, mint, modelUrl });
 }
 
 export async function POST(req: NextRequest) {

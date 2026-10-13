@@ -10,7 +10,7 @@ const SOL = "So11111111111111111111111111111111111111112";
 
 type Detail = {
   ok: boolean; mint: string; isOurs: boolean;
-  our: { id: number; name: string; ticker: string; description: string; status: string; when: string; logoUrl: string | null } | null;
+  our: { id: number; name: string; ticker: string; description: string; status: string; when: string; logoUrl: string | null; modelUrl?: string | null } | null;
   onchain: { cluster: string; decimals: number; supply: number | null; mintAuthority: string | null; freezeAuthority: string | null } | null;
   market: any | null;
   links: Record<string, string>;
@@ -416,6 +416,21 @@ export default function CoinPage() {
           </div>
         </section>
       </div>
+      {/* real 3D asset for this coin (three.ws 3D Forge) */}
+      {d.our?.modelUrl && (
+        <section className="panel p-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="kicker m-0">3d asset · real glb</p>
+            <a className="chip" href={d.our.modelUrl} target="_blank" rel="noreferrer">download GLB ↗</a>
+            <Link className="chip" href="/3d">make another →</Link>
+          </div>
+          {/* @ts-expect-error custom element injected by the 3D Forge page script */}
+          <model-viewer src={d.our.modelUrl} alt={`${name} 3D model`} camera-controls auto-rotate
+                        style={{ width: "100%", height: 360, background: "#04050c", border: "1px solid var(--line)", marginTop: 12 }} />
+          <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js" async />
+        </section>
+      )}
+
       {/* real risk + holder distribution (three.ws) */}
       {!d.isOurs && (risk || holders) && (
         <section className="panel p-4">

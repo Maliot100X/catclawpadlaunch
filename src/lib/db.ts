@@ -21,6 +21,7 @@ export type CoinRow = {
   create_sig: string | null;
   mint_sig: string | null;
   explorer: string | null;
+  model_url?: string | null;
   when: string;
 };
 
@@ -54,6 +55,7 @@ export async function ensureSchema(): Promise<boolean> {
     )
   `;
   await sql`ALTER TABLE coins ADD COLUMN IF NOT EXISTS logo_url TEXT`;
+  await sql`ALTER TABLE coins ADD COLUMN IF NOT EXISTS model_url TEXT`;
   await sql`CREATE INDEX IF NOT EXISTS coins_created_idx ON coins (created_at DESC)`;
   schemaReady = true;
   return true;
@@ -65,7 +67,7 @@ export async function listCoins(limit = 100): Promise<CoinRow[]> {
   try {
     await ensureSchema();
     const rows = await sql`
-      SELECT id, mint, name, ticker, description, tags, logo_style, logo_url, source, status,
+      SELECT id, mint, name, ticker, description, tags, logo_style, logo_url, model_url, source, status,
              create_sig, mint_sig, explorer, created_at AS when
       FROM coins ORDER BY created_at DESC LIMIT ${limit}
     `;
@@ -127,4 +129,29 @@ export async function insertCoinFile(rec: any): Promise<any> {
   await fs.mkdir(path.dirname(DB_FILE), { recursive: true });
   await fs.writeFile(DB_FILE, JSON.stringify(coins, null, 2));
   return row;
+}
+
+/** Attach a real 3D asset (GLB) to a coin — set by the 3D Forge / agents. */
+export async function setCoinModel(mint: string, modelUrl: string): Promise<boolean> {
+  const sql = client();
+  if (!sql) return false;
+  try {
+    await ensureSchema();
+    await sql`UPDATE coins SET model_url = ${modelUrl} WHERE mint = ${mint}`;
+    return true;
+  } catch { return false; }
+}
+
+export async function getCoinByMint(mint: string): Promise<CoinRow | null> {
+  const sql = client();
+  if (!sql) return null;
+  try {
+    await ensureSchema();
+    const rows = await sql`
+      SELECT id, mint, name, ticker, description, tags, logo_style, logo_url, model_url, source, status,
+             create_sig, mint_sig, explorer, created_at AS when
+      FROM coins WHERE mint = ${mint} LIMIT 1
+    `;
+    return ((rows as unknown as CoinRow[])[0]) ?? null;
+  } catch { return null; }
 }
