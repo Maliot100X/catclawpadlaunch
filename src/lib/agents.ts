@@ -168,6 +168,47 @@ export async function createAgent(input: { name: string; strategy?: string; pers
   return { id, name, pubkey, budgetSol: fund, fundSig };
 }
 
+/**
+ * A registered agent asks for more runway: the treasury funds its wallet with a real devnet tx.
+ * Capped so one call can't drain the treasury.
+ */
+export async function fundAgent(id: number, requestedSol: number) {
+  const sql = sqlClient();
+  if (!sql) throw new Error("database not configured");
+  await ensureAgentSchema(sql);
+  const found = await getAgent(id);
+  if (!found) throw new Error("agent not found");
+  const a: any = found.agent;
+  const amount = Math.max(0.01, Math.min(0.5, Number(requestedSol) || 0.1));
+
+  const { kp, conn } = getPlatformWallet();
+  const dest = agentKeypair(a.id, a.name);
+  const tx = new Transaction().add(
+    SystemProgram.transfer({ fromPubkey: kp.publicKey, toPubkey: dest.publicKey, lamports: Math.round(amount * LAMPORTS_PER_SOL) })
+  );
+  tx.feePayer = kp.publicKey;
+  tx.recentBlockhash = (await conn.getLatestBlockhash("confirmed")).blockhash;
+  tx.sign(kp);
+  const sig = await conn.sendRawTransaction(tx.serialize(), { maxRetries: 3 });
+  const t0 = Date.now();
+  let confirmed = false;
+  while (Date.now() - t0 < 60_000) {
+    const st = (await conn.getSignatureStatuses([sig], { searchTransactionHistory: true }))?.value?.[0];
+    if (st?.err) throw new Error(JSON.stringify(st.err));
+    if (st && (st.confirmationStatus === "confirmed" || st.confirmationStatus === "finalized")) { confirmed = true; break; }
+    await new Promise((r) => setTimeout(r, 1200));
+  }
+  if (!confirmed) throw new Error("funding tx not confirmed in 60s");
+
+  const balance = (await conn.getBalance(dest.publicKey)) / LAMPORTS_PER_SOL;
+  await sql`UPDATE agents SET budget_sol = ${balance} WHERE id = ${id}`;
+  await sql`
+    INSERT INTO agent_activity (agent_id, kind, summary, signature, fuel_sol)
+    VALUES (${id}, 'fund', ${`treasury funded ${amount} SOL on request`}, ${sig}, ${amount})
+  `;
+  return { id, pubkey: dest.publicKey.toBase58(), amount, signature: sig, balanceSol: balance };
+}
+
 export async function logActivity(agentId: number, kind: string, summary: string, signature?: string | null, mint?: string | null, fuelSol?: number | null) {
   const sql = sqlClient();
   if (!sql) return;
