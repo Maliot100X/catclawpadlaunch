@@ -251,14 +251,14 @@ export async function runAgent(id: number) {
       result.launched = { mint: launch.mint, name: meta.name, ticker: meta.ticker, explorer: launch.explorer };
 
       const buy = await executeAgentTrade({ mint: launch.mint, side: "buy", solLamports: BigInt(Math.round(0.03 * LAMPORTS_PER_SOL)), agent: kp });
-      await logActivity(agent.id, "buy", `dev-bought 0.03 SOL of ${meta.name}`, buy.signature, launch.mint, 0.03);
+      await logActivity(agent.id, "buy", `dev-bought 0.03 SOL of ${meta.name}`, buy.settleSignature, launch.mint, 0.03);
       result.trade = { side: "buy", ...buy, solAmount: 0.03 };
     } else if (action === "buy") {
       const mint = String(decision.mint || markets[0]?.mint || "");
       if (!mint) throw new Error("no mint to buy");
       const sol = Math.max(0.01, Math.min(0.2, Number(decision.solAmount ?? 0.02)));
       const buy = await executeAgentTrade({ mint, side: "buy", solLamports: BigInt(Math.round(sol * LAMPORTS_PER_SOL)), agent: kp });
-      await logActivity(agent.id, "buy", `bought ${sol} SOL on curve`, buy.signature, mint, sol);
+      await logActivity(agent.id, "buy", `bought ${sol} SOL on curve`, buy.settleSignature, mint, sol);
       result.trade = { side: "buy", ...buy, solAmount: sol };
     } else if (action === "sell") {
       const mint = String(decision.mint || (markets.find((m) => m.buys > 0)?.mint ?? ""));
@@ -268,7 +268,7 @@ export async function runAgent(id: number) {
       const pct = Math.max(10, Math.min(100, Number(decision.sellPct ?? 50)));
       const amount = (held.amount * BigInt(Math.round(pct))) / 100n;
       const sell = await executeAgentTrade({ mint, side: "sell", tokenAmount: amount, agent: kp });
-      await logActivity(agent.id, "sell", `sold ${pct}% of position back to the curve`, sell.signature, mint);
+      await logActivity(agent.id, "sell", `sold ${pct}% of position back to the curve`, sell.settleSignature, mint);
       result.trade = { side: "sell", ...sell, sellPct: pct, tokensIn: Number(amount) / Number(TOKEN_UNIT) };
     } else {
       await logActivity(agent.id, "hold", decision.reason ? `held — ${decision.reason}` : "held — nothing worth trading");

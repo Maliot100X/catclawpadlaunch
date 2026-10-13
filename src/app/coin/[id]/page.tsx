@@ -143,57 +143,55 @@ export default function CoinPage() {
   useEffect(() => { quoteJup().catch(() => {}); }, [quoteJup]);
 
   // ---------- execute ----------
-  async function buyDevnet() {
-    if (!publicKey) return;
-    const r = await fetch("/api/dex/buy", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mint: id, solAmount: Number(amount), userPublicKey: publicKey.toBase58() }),
-    });
-    const j = await r.json();
-    if (!j.ok) throw new Error(j.error);
-    setStatus(`sign in wallet — ${j.expected.tokensOut.toLocaleString()} tokens`);
-    const tx = Transaction.from(Buffer.from(j.transaction, "base64"));
-    const signed = await signTransaction!(tx as any);
-    setStatus("sending…");
-    const sig = await connection.sendRawTransaction((signed as any).serialize(), { maxRetries: 3 });
-    setStatus("confirming…");
-    await connection.confirmTransaction(sig, "confirmed");
-    await fetch("/api/dex/confirm", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mint: id, side: "buy", userWallet: publicKey.toBase58(), solAmount: Number(amount), signature: sig }),
-    });
-    setStatus("bought — real devnet fill");
-    setSigLink(`https://explorer.solana.com/tx/${sig}?cluster=devnet`);
-    await load();
-  }
+  // Wallet signs ONLY its own transfer; the treasury releases the tokens server-side
+  // immediately after the payment verifies on-chain. No co-signature, so every
+  // wallet works (this is what was breaking buys before).
+  async function tradeDevnet(side: "buy" | "sell") {
+    if (!publicKey) { setStatus("connect a wallet first"); return; }
+    const me = publicKey.toBase58();
+    let body: any = { mint: id, userPublicKey: me };
+    if (side === "buy") body.solAmount = Number(amount);
+    else {
+      const bal = await fetch(`/api/dex/balance?mint=${id}&owner=${me}`, { cache: "no-store" }).then((r) => r.json()).catch(() => null);
+      const total = Number(bal?.uiAmount ?? 0);
+      if (!total) { setStatus("no tokens in this wallet — buy first"); return; }
+      body.tokenAmount = (total * sellPct) / 100;
+    }
 
-  async function sellDevnet() {
-    if (!publicKey) return;
-    // read the wallet's real token balance, then sell the chosen share of it
-    const ata = await fetch(`/api/dex/balance?mint=${id}&owner=${publicKey.toBase58()}`, { cache: "no-store" })
-      .then((r) => r.json()).catch(() => null);
-    const total = Number(ata?.uiAmount ?? 0);
-    if (!total) { setStatus("no tokens in this wallet — buy first"); return; }
-    const amountTokens = (total * sellPct) / 100;
-    const r = await fetch("/api/dex/sell", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mint: id, tokenAmount: amountTokens, userPublicKey: publicKey.toBase58() }),
-    });
-    const j = await r.json();
-    if (!j.ok) throw new Error(j.error);
-    setStatus(`sign in wallet — ${j.expected.solOut} SOL back`);
-    const tx = Transaction.from(Buffer.from(j.transaction, "base64"));
+    const built = await fetch(`/api/dex/${side}`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    }).then((r) => r.json());
+    if (!built.ok) throw new Error(built.error);
+
+    setStatus(side === "buy"
+      ? `sign in wallet — paying ${built.expected.solIn} SOL for ~${Math.round(built.expected.tokensOut).toLocaleString()} tokens`
+      : `sign in wallet — returning ${Math.round(built.expected.tokensIn).toLocaleString()} tokens for ~${built.expected.solOut} SOL`);
+
+    const tx = Transaction.from(Buffer.from(built.transaction, "base64"));
     const signed = await signTransaction!(tx as any);
-    setStatus("sending…");
+    setStatus("sending your side…");
     const sig = await connection.sendRawTransaction((signed as any).serialize(), { maxRetries: 3 });
-    setStatus("confirming…");
     await connection.confirmTransaction(sig, "confirmed");
-    await fetch("/api/dex/confirm", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mint: id, side: "sell", userWallet: publicKey.toBase58(), tokenAmount: amountTokens, signature: sig }),
-    });
-    setStatus("sold — real devnet fill");
     setSigLink(`https://explorer.solana.com/tx/${sig}?cluster=devnet`);
+
+    setStatus("settling — treasury releasing your side…");
+    let settled: any = null;
+    for (let i = 0; i < 8; i++) {
+      settled = await fetch("/api/dex/settle", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: built.orderId, signature: sig }),
+      }).then((r) => r.json()).catch(() => null);
+      if (settled?.ok) break;
+      await new Promise((r) => setTimeout(r, 2500));
+    }
+    if (settled?.ok) {
+      setStatus(side === "buy"
+        ? `bought ${Math.round(settled.tokensOut).toLocaleString()} tokens — settled on-chain`
+        : `sold — ${settled.solOut} SOL sent to your wallet`);
+      if (settled.settleSignature) setSigLink(`https://explorer.solana.com/tx/${settled.settleSignature}?cluster=devnet`);
+    } else {
+      setStatus(`payment confirmed; settlement is retrying automatically (${settled?.reason ?? "queued"})`);
+    }
     await load();
   }
 
@@ -221,7 +219,7 @@ export default function CoinPage() {
     setBusy(true); setStatus(""); setSigLink("");
     try {
       if (!connected) { setStatus("connect a wallet first"); return; }
-      if (d?.isOurs) { tab === "buy" ? await buyDevnet() : await sellDevnet(); }
+      if (d?.isOurs) { await tradeDevnet(tab); }
       else await swapJupiter();
       void signAllTransactions;
     } catch (e: any) {
@@ -380,7 +378,7 @@ export default function CoinPage() {
 
           <div className="flex flex-wrap gap-2">
             <button className="btn btn-forge" disabled={busy} onClick={execute}>
-              {!connected ? "connect wallet" : tab === "buy" ? "BUY — sign in wallet" : "SELL — sign in wallet"}
+              {!connected ? "connect wallet" : tab === "buy" ? `BUY ${amount} SOL` : `SELL ${sellPct}%`}
             </button>
             {d.isOurs && <button className="btn" disabled={busy} onClick={cleanup}>reclaim empty accounts {emptyAccts != null ? `(${emptyAccts})` : ""}</button>}
             {!d.isOurs && <button className="btn" onClick={() => quoteJup()}>refresh quote</button>}

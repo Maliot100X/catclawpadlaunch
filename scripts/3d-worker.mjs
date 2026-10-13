@@ -63,6 +63,16 @@ async function finish(id, patch) {
 
 const log = (...a) => console.log(new Date().toISOString(), ...a);
 
+/** Sweep interrupted market settlements too, so a paid order is never left unfilled. */
+const SWEEP_URL = process.env.SWEEP_URL || "https://catclawpad.vercel.app/api/dex/sweep";
+async function sweep() {
+  try {
+    const r = await fetch(SWEEP_URL, { signal: AbortSignal.timeout(55_000) });
+    const j = await r.json();
+    if (j?.attempting) log(`settlement sweep: ${j.attempting} order(s) →`, JSON.stringify(j.results).slice(0, 200));
+  } catch { /* ignore */ }
+}
+
 /** Step 1 — a real FLUX image URL from the prompt (no download needed). */
 function fluxUrl(prompt, size = 768) {
   const p = encodeURIComponent(`${prompt}, single centered subject, clean solid dark background, no text, product shot`);
@@ -157,8 +167,10 @@ if (ONCE) {
   while (await runOne()) { /* drain */ }
   log("queue drained");
 } else {
+  let lastSweep = 0;
   while (!stop) {
     const did = await runOne().catch(() => false);
+    if (Date.now() - lastSweep > 30_000) { lastSweep = Date.now(); await sweep(); }
     if (!did) await new Promise((r) => setTimeout(r, 7000));
   }
   log("worker stopped");
