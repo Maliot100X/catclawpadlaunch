@@ -73,11 +73,13 @@ export async function POST(req: NextRequest) {
 
     const token = `claw_agent_${randomBytes(24).toString("hex")}`;
     const tokenHash = createHash("sha256").update(token).digest("hex");
+    // Short, human-copyable claim code — survives chat hosts that redact long tokens.
+    const claimCode = `CLAW-${randomBytes(3).toString("hex").toUpperCase()}`;
     const sql = sqlClient();
     if (sql) {
       await ensureAgentExtraColumns(sql);
       await sql`
-        UPDATE agents SET token = ${tokenHash}, skill_md = ${skillMd || null},
+        UPDATE agents SET token = ${tokenHash}, claim_code = ${claimCode}, skill_md = ${skillMd || null},
                source = ${body.publicKey ? "ed25519" : skillMd ? "skill.md" : "api"}
          WHERE id = ${created.id}
       `;
@@ -91,8 +93,10 @@ export async function POST(req: NextRequest) {
       wallet: created.pubkey,
       fundedSol: created.budgetSol,
       agentToken: token,
+      claimCode,
+      claimLoginUrl: `https://catclawpad.vercel.app/?claim=${claimCode}`,
       verified,
-      note: "save agentToken — it is shown once and authenticates this agent",
+      note: "save agentToken — it is shown once and authenticates this agent; claimCode is a short alternative for hosts that redact long tokens",
       profile: `/agents/${created.id}`,
     });
   } catch (e: any) {

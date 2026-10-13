@@ -65,6 +65,11 @@ async function ensureAgentSchema(sql: any) {
   `;
   await sql`CREATE INDEX IF NOT EXISTS agent_activity_idx ON agent_activity (agent_id, created_at DESC)`;
   await sql`ALTER TABLE agents ADD COLUMN IF NOT EXISTS token TEXT`;
+  await sql`ALTER TABLE agents ADD COLUMN IF NOT EXISTS claim_code TEXT`;
+  await sql`ALTER TABLE agents ADD COLUMN IF NOT EXISTS verify_code TEXT`;
+  await sql`ALTER TABLE agents ADD COLUMN IF NOT EXISTS verified BOOLEAN DEFAULT FALSE`;
+  await sql`ALTER TABLE agents ADD COLUMN IF NOT EXISTS twitter_handle TEXT`;
+  await sql`ALTER TABLE agents ADD COLUMN IF NOT EXISTS verified_at TIMESTAMPTZ`;
   await sql`ALTER TABLE agents ADD COLUMN IF NOT EXISTS owner_wallet TEXT`;
   await sql`ALTER TABLE agents ADD COLUMN IF NOT EXISTS wallet_mode TEXT DEFAULT 'platform'`;
   await sql`ALTER TABLE agents ADD COLUMN IF NOT EXISTS skill_md TEXT`;

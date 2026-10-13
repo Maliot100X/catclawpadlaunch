@@ -17,18 +17,23 @@ export async function POST(req: NextRequest) {
   let body: any = {};
   try { body = await req.json(); } catch { /* ignore */ }
   const raw = String(body?.agentToken ?? body?.token ?? "").trim();
-  if (!raw) return Response.json({ ok: false, error: "agentToken required" }, { status: 400 });
+  const claim = String(body?.claimCode ?? "").trim().toUpperCase();
+  if (!raw && !claim) return Response.json({ ok: false, error: "agentToken or claimCode required" }, { status: 400 });
 
   const sql = sqlClient();
   if (!sql) return Response.json({ ok: false, error: "database not configured" }, { status: 500 });
 
-  const hash = createHash("sha256").update(raw).digest("hex");
-  const rows = await sql`
-    SELECT id, name, strategy, personality, pubkey, status, budget_sol, owner_wallet, wallet_mode, model_url, created_at
-    FROM agents WHERE token = ${hash} LIMIT 1
-  `;
+  const rows = raw
+    ? await sql`
+        SELECT id, name, strategy, personality, pubkey, status, budget_sol, owner_wallet, wallet_mode, model_url, verified, twitter_handle, created_at
+        FROM agents WHERE token = ${createHash("sha256").update(raw).digest("hex")} LIMIT 1
+      `
+    : await sql`
+        SELECT id, name, strategy, personality, pubkey, status, budget_sol, owner_wallet, wallet_mode, model_url, verified, twitter_handle, created_at
+        FROM agents WHERE UPPER(claim_code) = ${claim} LIMIT 1
+      `;
   const agent = (rows as any[])[0];
-  if (!agent) return Response.json({ ok: false, error: "invalid agent token" }, { status: 401 });
+  if (!agent) return Response.json({ ok: false, error: raw ? "invalid agent token" : "invalid claim code" }, { status: 401 });
 
   return Response.json(
     { ok: true, agentId: agent.id, agent },
