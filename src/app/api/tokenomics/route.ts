@@ -62,22 +62,28 @@ export async function GET(_req: NextRequest) {
       const unescaped = html.replace(/\\"/g, '"').replace(/\\\\/g, "\\");
       const flat = html.replace(/\\"/g, '"').replace(/<[^>]+>/g, " ").replace(/!\[[^\]]*\]\([^)]*\)/g, " ").replace(/\s+/g, " ");
 
-      const tokenObjMatch = unescaped.match(new RegExp('\\{[^{}]*"mintAddress":"' + MINT + '"[^{}]*\\}'));
-      if (tokenObjMatch) {
-        try {
-          const o = JSON.parse(tokenObjMatch[0]);
-          out.clawpump = {
-            name: o.tokenName ?? null,
-            symbol: o.tokenSymbol ?? null,
-            marketCapUsd: o.marketCap ?? null,
-            totalEarnedSol: o.totalEarnedSol ?? null,
-            priceUsd: o.priceUsd ?? null,
-            platform: o.platformLabel ?? null,
-            platformUrl: o.platformUrl ?? null,
-            xUsername: o.agentXUsername ?? null,
-          };
-        } catch { /* fall through to the string scan */ }
-      }
+      const grab = (key: string) => {
+        const m = unescaped.match(new RegExp('"' + key + '"\\s*:\\s*("?)([^,}\\]]{1,60})'));
+        if (!m) return null;
+        const v = m[2].replace(/"/g, "");
+        return v === "null" ? null : v;
+      };
+      const numOrNull = (key: string) => {
+        const v = grab(key);
+        const n = v == null ? NaN : Number(v);
+        return Number.isFinite(n) ? n : null;
+      };
+      out.clawpump = {
+        name: grab("tokenName"),
+        symbol: grab("tokenSymbol"),
+        marketCapUsd: numOrNull("marketCap"),
+        totalEarnedSol: numOrNull("totalEarnedSol"),
+        priceUsd: numOrNull("priceUsd"),
+        platform: grab("platformLabel"),
+        platformUrl: grab("platformUrl"),
+        xUsername: grab("agentXUsername"),
+        launchPlatform: grab("launchPlatform"),
+      };
 
       // numeric fields anywhere in the payload (fee %, fee share, etc.)
       const nums: Record<string, number | null> = {};
@@ -87,7 +93,7 @@ export async function GET(_req: NextRequest) {
 
       out.fees = {
         // published, exact values only — anything not published stays null
-        earnedSol: nums.totalEarnedSol ?? out.clawpump?.totalEarnedSol ?? null,
+        earnedSol: out.clawpump?.totalEarnedSol ?? nums.totalEarnedSol ?? null,
         tradeFeePercent: nums.feePercent ?? null,
         creatorAllocationPct: nums.creatorPct ?? nums.creatorAllocationPct ?? null,
         buybackPct: nums.buybackPct ?? null,
