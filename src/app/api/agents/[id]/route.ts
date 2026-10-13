@@ -1,12 +1,12 @@
 import { NextRequest } from "next/server";
-import { getAgent, runAgent } from "@/lib/agents";
+import { getAgent, runAgent, agentHoldings } from "@/lib/agents";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const maxDuration = 60;
 
-/** GET  /api/agents/[id]      -> agent + its real activity log
+/** GET  /api/agents/[id]      -> agent + its real activity log + live holdings
  *  POST /api/agents/[id]      -> run one decision cycle (real on-chain trades)
  */
 export async function GET(_req: NextRequest, ctx: { params: { id: string } }) {
@@ -15,7 +15,9 @@ export async function GET(_req: NextRequest, ctx: { params: { id: string } }) {
   try {
     const found = await getAgent(id);
     if (!found) return Response.json({ ok: false, error: "agent not found" }, { status: 404 });
-    return Response.json({ ok: true, ...found }, { headers: { "Cache-Control": "no-store" } });
+    let holdings: any[] = [];
+    try { holdings = await agentHoldings(id); } catch { /* holdings are best-effort */ }
+    return Response.json({ ok: true, ...found, holdings }, { headers: { "Cache-Control": "no-store" } });
   } catch (e: any) {
     return Response.json({ ok: false, error: String(e?.message ?? e) }, { status: 500 });
   }

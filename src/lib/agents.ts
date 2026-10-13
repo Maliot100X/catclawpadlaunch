@@ -209,6 +209,56 @@ export async function fundAgent(id: number, requestedSol: number) {
   return { id, pubkey: dest.publicKey.toBase58(), amount, signature: sig, balanceSol: balance };
 }
 
+/**
+ * Manual sell, owner-triggered from the agent profile (the cycle's sell path, on demand).
+ * Sells pct (10-100) of whatever this agent holds of `mint`, back into the curve, on chain.
+ */
+export async function sellAgentPosition(id: number, mint: string, pct = 50) {
+  const sql = sqlClient();
+  if (!sql) throw new Error("database not configured");
+  await ensureAgentSchema(sql);
+  const found = await getAgent(id);
+  if (!found) throw new Error("agent not found");
+  const a: any = found.agent;
+  if (!mint || !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint)) throw new Error("bad mint");
+
+  const kp = agentKeypair(a.id, a.name);
+  const held = await tokenBalanceOf(kp.publicKey.toBase58(), mint);
+  if (!held.exists || held.amount <= 0n) throw new Error("this agent holds none of that mint");
+
+  const p = Math.max(10, Math.min(100, Number(pct) || 50));
+  const amount = (held.amount * BigInt(Math.round(p))) / 100n;
+  const sell = await executeAgentTrade({ mint, side: "sell", tokenAmount: amount, agent: kp });
+  await logActivity(id, "sell", `owner sold ${p}% of the position back to the curve`, sell.settleSignature, mint);
+  return { id, mint, sellPct: p, tokensIn: Number(amount) / Number(TOKEN_UNIT), ...sell };
+}
+
+/** Every live mint this agent currently holds a position in — for the profile's holdings list. */
+export async function agentHoldings(id: number) {
+  const found = await getAgent(id);
+  if (!found) return [];
+  const a: any = found.agent;
+  const kp = agentKeypair(a.id, a.name);
+  const coins = await listCoins(50);
+  const out: any[] = [];
+  for (const c of coins as any[]) {
+    if (!c.mint) continue;
+    try {
+      const b = await tokenBalanceOf(kp.publicKey.toBase58(), String(c.mint));
+      if (b.exists && b.amount > 0n) {
+        const pool = await getPool(String(c.mint));
+        out.push({
+          mint: c.mint, name: c.name, ticker: c.ticker,
+          amount: Number(b.amount) / Number(TOKEN_UNIT),
+          priceSol: pool ? priceSolPerToken(pool) : null,
+          curvePct: pool ? curveProgressPct(pool) : null,
+        });
+      }
+    } catch { /* skip unreachable mint */ }
+  }
+  return out;
+}
+
 export async function logActivity(agentId: number, kind: string, summary: string, signature?: string | null, mint?: string | null, fuelSol?: number | null) {
   const sql = sqlClient();
   if (!sql) return;

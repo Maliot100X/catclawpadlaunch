@@ -19,10 +19,12 @@ export default function AgentProfile() {
   const [loading, setLoading] = useState(true);
   const [modelUrl, setModelUrl] = useState<string | null>(null);
   const [avatarMsg, setAvatarMsg] = useState("");
+  const [holdings, setHoldings] = useState<any[]>([]);
+  const [sellMsg, setSellMsg] = useState("");
 
   const load = useCallback(async () => {
     const j = await fetch(`/api/agents/${id}`, { cache: "no-store" }).then((r) => r.json()).catch(() => null);
-    if (j?.ok) { setA(j.agent); setActs(j.activity ?? []); }
+    if (j?.ok) { setA(j.agent); setActs(j.activity ?? []); setHoldings(j.holdings ?? []); }
     const lb = await fetch("/api/leaderboard", { cache: "no-store" }).then((r) => r.json()).catch(() => null);
     if (lb?.ok) setRank((lb.leaderboard ?? []).find((x: any) => String(x.id) === String(id)) ?? null);
     const av = await fetch(`/api/agents/${id}/avatar`, { cache: "no-store" }).then((r) => r.json()).catch(() => null);
@@ -78,6 +80,25 @@ export default function AgentProfile() {
     }).then((r) => r.json()).catch(() => null);
     if (j?.ok && j.modelUrl) { setModelUrl(j.modelUrl); setAvatarMsg("three.ws body attached"); }
     else setAvatarMsg(`error: ${j?.error ?? "could not attach"}`);
+  }
+
+  // Owner-triggered sell: releases part of this agent's position back into the curve, on chain.
+  async function sell(mint: string, pct: number) {
+    setSellMsg(`selling ${pct}%…`);
+    try {
+      const j = await fetch(`/api/agents/${id}/sell`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ mint, pct }),
+      }).then((r) => r.json());
+      if (j?.ok) {
+        const r = j.result ?? {};
+        setSellMsg(`sold ${pct}% · ${Number(r.tokensIn ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })} tokens back to the curve`);
+        await load();
+      } else setSellMsg(`error: ${j?.error ?? "sell failed"}`);
+    } catch (e: any) {
+      setSellMsg(`error: ${e?.message ?? e}`);
+    }
   }
 
   const trades = acts.filter((x) => x.kind === "buy" || x.kind === "sell");
@@ -146,6 +167,39 @@ export default function AgentProfile() {
           <p className="mono text-[11px] text-[var(--muted)] mt-2">
             showing this agent&apos;s default three.ws body ({avatarForAgent(id).label}) — pick another above, or forge a new one in the three.ws avatar studio.
           </p>
+        )}
+      </section>
+
+      <section className="panel p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="kicker m-0">holdings · live on-chain</p>
+          <button className="chip" onClick={load}>refresh</button>
+        </div>
+        {sellMsg && <p className="mono text-[11px] text-[var(--cyan)] mt-2">{sellMsg}</p>}
+        {holdings.length === 0 ? (
+          <p className="mono text-[11px] text-[var(--muted)] mt-2">
+            this agent holds nothing right now — run a cycle and it will buy on a live devnet curve.
+          </p>
+        ) : (
+          <div className="mt-3 space-y-2">
+            {holdings.map((h: any) => (
+              <div key={h.mint} className="border border-[var(--line)] p-2">
+                <div className="flex flex-wrap items-center gap-2 mono text-[11px]">
+                  <Link href={`/coin/${h.mint}`} className="text-[var(--lime)]">{h.ticker || h.name || h.mint.slice(0, 8)}</Link>
+                  <span className="text-[var(--muted)]">{Number(h.amount).toLocaleString(undefined, { maximumFractionDigits: 2 })} tokens</span>
+                  <span className="text-[var(--cyan)]">{h.priceSol != null ? `${Number(h.priceSol).toExponential(3)} SOL` : "—"}</span>
+                  <span className="text-[var(--muted)]">curve {h.curvePct != null ? `${Number(h.curvePct).toFixed(2)}%` : "—"}</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 mt-2">
+                  {[25, 50, 100].map((p) => (
+                    <button key={p} className="chip" onClick={() => sell(h.mint, p)} disabled={!!sellMsg && sellMsg.includes("selling")}>
+                      sell {p}%
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </section>
 
