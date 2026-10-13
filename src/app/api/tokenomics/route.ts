@@ -57,33 +57,55 @@ export async function GET(_req: NextRequest) {
     });
     if (r.ok) {
       const html = await r.text();
-      const text = html.replace(/<[^>]+>/g, " ").replace(/!\[[^\]]*\]\([^)]*\)/g, " ").replace(/\s+/g, " ");
-      const afterLabel = (label: string) => {
-        const i = text.indexOf(label);
-        if (i < 0) return null;
-        const tail = text.slice(i + label.length, i + label.length + 90);
-        const m = tail.match(/-?[0-9]+(?:\.[0-9]+)?/);
-        return m ? Number(m[0]) : null;
-      };
+      // clawpump ships its server payload as Next flight data; the token object
+      // and the numeric *Sol/*Pct fields inside it are the authoritative values.
+      const unescaped = html.replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+      const flat = html.replace(/\\"/g, '"').replace(/<[^>]+>/g, " ").replace(/!\[[^\]]*\]\([^)]*\)/g, " ").replace(/\s+/g, " ");
+
+      const tokenObjMatch = unescaped.match(new RegExp('\\{[^{}]*"mintAddress":"' + MINT + '"[^{}]*\\}'));
+      if (tokenObjMatch) {
+        try {
+          const o = JSON.parse(tokenObjMatch[0]);
+          out.clawpump = {
+            name: o.tokenName ?? null,
+            symbol: o.tokenSymbol ?? null,
+            marketCapUsd: o.marketCap ?? null,
+            totalEarnedSol: o.totalEarnedSol ?? null,
+            priceUsd: o.priceUsd ?? null,
+            platform: o.platformLabel ?? null,
+            platformUrl: o.platformUrl ?? null,
+            xUsername: o.agentXUsername ?? null,
+          };
+        } catch { /* fall through to the string scan */ }
+      }
+
+      // numeric fields anywhere in the payload (fee %, fee share, etc.)
+      const nums: Record<string, number | null> = {};
+      const numRe = /"([A-Za-z][A-Za-z0-9_]{2,40}(?:Sol|Pct|Percent|Usd))"\s*:\s*(-?[0-9.]+)/g;
+      let nm: RegExpExecArray | null;
+      while ((nm = numRe.exec(unescaped))) nums[nm[1]] = Number(nm[2]);
+
       out.fees = {
-        creatorAllocationPct: afterLabel("Creator allocation"),
-        creatorFeesSol: afterLabel("Creator fees"),
-        buybacksSol: afterLabel("Buybacks"),
-        earnedSol: afterLabel("Earned"),
-        sentSol: afterLabel("Sent"),
-        agentPnlSol: afterLabel("Agent PNL"),
-        buybackSpentSol: afterLabel("Buybacks spent"),
-        strategyFundingSol: afterLabel("Strategy funding"),
+        // published, exact values only — anything not published stays null
+        earnedSol: nums.totalEarnedSol ?? out.clawpump?.totalEarnedSol ?? null,
+        tradeFeePercent: nums.feePercent ?? null,
+        creatorAllocationPct: nums.creatorPct ?? nums.creatorAllocationPct ?? null,
+        buybackPct: nums.buybackPct ?? null,
+        operationsPct: nums.operationsPct ?? null,
+        buybacksSol: nums.totalBuybackSol ?? null,
+        sentSol: nums.totalSentSol ?? null,
+        claimableSol: nums.claimableSol ?? nums.unclaimedSol ?? null,
+        agentPnlSol: nums.agentPnlSol ?? nums.pnlSol ?? null,
+        raw: nums,
       };
-      const alloc = text.match(/Buyback\s*([0-9]+)%\s*Operations\s*([0-9]+)%/i);
-      if (alloc) out.fees.allocation = { buybackPct: Number(alloc[1]), operationsPct: Number(alloc[2]) };
-      out.launchDate = text.match(/Created\s*([A-Z][a-z]{2}\s+\d{1,2},\s+\d{4}\s*·\s*\d{2}:\d{2})/)?.[1] ?? null;
-      out.agent = text.match(/Agent\s*([A-Z][A-Za-z0-9_\- ]{2,30})\s*Created/)?.[1]?.trim() ?? null;
+
+      out.launchDate = flat.match(/Created\s*([A-Z][a-z]{2}\s+\d{1,2},\s+\d{4}\s*·\s*\d{2}:\d{2})/)?.[1] ?? null;
+      out.agent = unescaped.match(/"tokenName":"([^"]+)"/)?.[1] ?? null;
 
       const txs: { sig: string; sol: number | null; label: string | null }[] = [];
       const re = /https:\/\/solscan\.io\/tx\/([1-9A-HJ-NP-Za-km-z]{40,90})/g;
       let m: RegExpExecArray | null;
-      while ((m = re.exec(html)) && txs.length < 10) {
+      while ((m = re.exec(html)) && txs.length < 12) {
         const around = html.slice(Math.max(0, m.index - 300), m.index).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
         const sol = around.match(/([0-9]+\.[0-9]+)\s*SOL/i);
         txs.push({ sig: m[1], sol: sol ? Number(sol[1]) : null, label: /sent/i.test(around) ? "sent" : /claim/i.test(around) ? "claimed" : null });
