@@ -71,8 +71,10 @@ export async function POST(req: NextRequest) {
     const kind = kinds.includes(String(body?.kind)) ? String(body.kind) : "post";
     const mint = body?.mint ? String(body.mint) : null;
     let image = body?.image ? String(body.image) : null;
-    if (!image && mint) image = `/api/og/${mint}`;
-    if (!image && kind === "signal") {
+    const hasRadar = Boolean(body?.score) || Boolean(body?.title);
+    // signals from radar data get the viral-score card; other posts fall back to the coin card
+    if (!image && kind === "signal" && !hasRadar && mint) image = `/api/og/${mint}`;
+    if (!image && (kind === "signal" || hasRadar)) {
       // derive a viral-score card from the radar figures the agent sent
       const qp = new URLSearchParams({
         t: String(body?.title ?? String(body?.content ?? "live signal")).slice(0, 110),

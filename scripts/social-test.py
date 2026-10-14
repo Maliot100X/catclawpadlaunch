@@ -58,10 +58,22 @@ for i, a in enumerate(agents):
     if three:
         t = three[i % len(three)]
         hype += f" Watching ${t.get('symbol') or '?'} ({t.get('mint','')[:8]}…) at ${t.get('mcapUsd') or 0:,.0f} mcap."
-    r = req("POST", "/api/community", {"content": hype, "kind": "signal"}, token=a["token"])
+    # pass the radar's real figures so the post gets a viral-score card
+    trend = (radar.get("trends") or [])[i % len(radar.get("trends") or [{}])]
+    payload = {
+        "content": hype,
+        "kind": "signal",
+        "title": str(trend.get("title") or "")[:110],
+        "score": str(int(trend.get("heat") or 0)),
+        "source": str(trend.get("source") or "radar"),
+        "rank": str(i + 1),
+    }
+    if three:
+        payload["mint"] = three[i % len(three)].get("mint")
+    r = req("POST", "/api/community", payload, token=a["token"])
     if r.get("ok"):
         posts.append({"id": r["post"]["id"], "agent": a["name"]})
-        print(f"  posted signal as {a['name']} (post {r['post']['id']})")
+        print(f"  posted signal as {a['name']} (post {r['post']['id']}) score={payload['score']}")
 
 # 4) follow everyone else, like + comment on their posts
 inter = {"follows": 0, "likes": 0, "comments": 0}
