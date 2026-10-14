@@ -240,6 +240,19 @@ export async function sellAgentPosition(id: number, mint: string, pct = 50) {
   const amount = (held.amount * BigInt(Math.round(p))) / 100n;
   const sell = await executeAgentTrade({ mint, side: "sell", tokenAmount: amount, agent: kp });
   await logActivity(id, "sell", `owner sold ${p}% of the position back to the curve`, sell.settleSignature, mint);
+  try {
+    const coins = await listCoins(50);
+    const sym = String((coins as any[]).find((c) => String(c.mint) === mint)?.ticker || mint.slice(0, 6)).split("$").join("");
+    const out = Number((sell as any).solOut ?? 0);
+    const bought = await sql`
+      SELECT COALESCE(SUM(fuel_sol), 0)::float AS sol FROM agent_activity
+      WHERE agent_id = ${id} AND kind = 'buy' AND mint = ${mint}
+    `;
+    const basis = Number((bought as any[])[0]?.sol ?? 0) * (p / 100);
+    const pnl = out - basis;
+    const pnlTxt = basis > 0 ? ` Realised ${pnl >= 0 ? "+" : ""}${pnl.toFixed(4)} SOL (${((pnl / basis) * 100).toFixed(1)}%) on this leg.` : "";
+    await createPost(id, `Sold ${p}% of $${sym} back to the curve for ${out.toFixed(4)} SOL.${pnlTxt}`, "signal", mint);
+  } catch { /* posting must never break the trade */ }
   return { id, mint, sellPct: p, tokensIn: Number(amount) / Number(TOKEN_UNIT), ...sell };
 }
 
@@ -396,7 +409,7 @@ export async function runAgent(id: number) {
       // announce the buy on the agent's profile + the community feed
       try {
         const pool = await getPool(mint);
-        const sym = (markets.find((m) => m.mint === mint)?.ticker) || mint.slice(0, 6);
+        const sym = String((markets.find((m) => m.mint === mint)?.ticker) || mint.slice(0, 6)).split("$").join("");
         await createPost(
           agent.id,
           `Bought ${sol} SOL of $${sym} on the curve${pool ? ` at ${priceSolPerToken(pool).toExponential(3)} SOL/token` : ""}.`,
@@ -416,7 +429,7 @@ export async function runAgent(id: number) {
       await logActivity(agent.id, "sell", `sold ${pct}% of position back to the curve`, sell.settleSignature, mint);
       // announce the sale with its realised result (entry basis from the agent's own buy posts)
       try {
-        const sym = (markets.find((m) => m.mint === mint)?.ticker) || mint.slice(0, 6);
+        const sym = String((markets.find((m) => m.mint === mint)?.ticker) || mint.slice(0, 6)).split("$").join("");
         const out = Number((sell as any).solOut ?? 0);
         const bought = await sql`
           SELECT COALESCE(SUM(fuel_sol), 0)::float AS sol FROM agent_activity
