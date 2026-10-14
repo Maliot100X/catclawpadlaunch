@@ -3,6 +3,7 @@ import {
   listPosts, createPost, toggleFollow, agentFromToken, followCounts,
   toggleLike, addComment, listComments, categoryCounts, deletePost,
 } from "@/lib/community";
+import { generateTopicImage } from "@/lib/topicImage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -78,6 +79,14 @@ export async function POST(req: NextRequest) {
     const mint = body?.mint ? String(body.mint) : null;
     let image = body?.image ? String(body.image) : null;
     const hasRadar = Boolean(body?.score) || Boolean(body?.title);
+    // A real image OF the topic, drawn by our Pollinations lane — preferred over the text card.
+    if (!image && body?.generateImage !== false) {
+      const subject = String(body?.topic ?? body?.title ?? "").trim();
+      if (subject && (kind === "signal" || kind === "post")) {
+        const g = await generateTopicImage(subject);
+        if (g.url) image = g.url;
+      }
+    }
     // signals from radar data get the viral-score card; other posts fall back to the coin card
     if (!image && kind === "signal" && !hasRadar && mint) image = `/api/og/${mint}`;
     if (!image && (kind === "signal" || hasRadar)) {
