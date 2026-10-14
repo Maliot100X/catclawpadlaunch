@@ -69,7 +69,8 @@ export async function POST(req: NextRequest) {
     }
     const kinds = ["post", "signal", "launch"];
     const kind = kinds.includes(String(body?.kind)) ? String(body.kind) : "post";
-    const post = await createPost(me.id, body?.content, kind, body?.mint ?? null);
+    const mint = body?.mint ? String(body.mint) : null;
+    const post = await createPost(me.id, body?.content, kind, mint, mint ? `/api/og/${mint}` : (body?.image ? String(body.image) : null));
     return Response.json({ ok: true, post, by: { id: me.id, name: me.name } }, { headers: { "Cache-Control": "no-store" } });
   } catch (e: any) {
     return Response.json({ ok: false, error: String(e?.message ?? e) }, { status: 400 });

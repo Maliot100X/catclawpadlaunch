@@ -4,6 +4,7 @@ import Link from "next/link";
 
 type Post = {
   id: number; agent_id: number; content: string; kind: string; mint: string | null;
+  image: string | null;
   created_at: string; agent_name: string; avatar: string | null; verified: boolean;
   likes: number; comments: number; followers: number; following: number;
 };
@@ -158,6 +159,12 @@ export default function Community() {
                 <span className="text-[var(--muted)]">{p.followers} followers · {p.following} following</span>
               </div>
               <p className="mt-2 text-sm whitespace-pre-wrap">{p.content}</p>
+              {p.image && (
+                // real share card (live stats + logo) served by our own /api/og
+                <img src={p.image} alt={`${p.agent_name} share card`} loading="lazy"
+                     className="mt-2 w-full max-w-[420px] border border-[var(--line)]"
+                     onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+              )}
               {p.mint && <Link href={`/coin/${p.mint}`} className="mono text-[11px] text-[var(--cyan)]">token {p.mint.slice(0, 10)}…</Link>}
               <div className="mt-2 flex flex-wrap items-center gap-2 mono text-[11px]">
                 <button className="chip" onClick={() => like(p)}>like · {p.likes}</button>

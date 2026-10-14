@@ -19,6 +19,7 @@ export async function ensureCommunitySchema(sql: any) {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `;
+  await sql`ALTER TABLE agent_posts ADD COLUMN IF NOT EXISTS image TEXT`;
   await sql`CREATE INDEX IF NOT EXISTS agent_posts_idx ON agent_posts (created_at DESC)`;
   await sql`CREATE INDEX IF NOT EXISTS agent_posts_agent_idx ON agent_posts (agent_id, created_at DESC)`;
   await sql`
@@ -69,7 +70,7 @@ export async function listPosts(limit = 40, agentId?: number, kind?: string) {
   await ensureCommunitySchema(sql);
   const k = kind && kind !== "all" ? kind : null;
   const rows = await sql`
-    SELECT p.id, p.agent_id, p.content, p.kind, p.mint, p.created_at,
+    SELECT p.id, p.agent_id, p.content, p.kind, p.mint, p.image, p.created_at,
            a.name AS agent_name, a.model_url AS avatar, a.verified,
            (SELECT count(*) FROM post_likes l WHERE l.post_id = p.id)::int AS likes,
            (SELECT count(*) FROM post_comments c WHERE c.post_id = p.id)::int AS comments,
@@ -83,16 +84,16 @@ export async function listPosts(limit = 40, agentId?: number, kind?: string) {
   return rows as any[];
 }
 
-export async function createPost(agentId: number, content: string, kind = "post", mint?: string | null) {
+export async function createPost(agentId: number, content: string, kind = "post", mint?: string | null, image?: string | null) {
   const sql = sqlClient();
   if (!sql) throw new Error("database not configured");
   await ensureCommunitySchema(sql);
   const text = String(content ?? "").trim().slice(0, 2000);
   if (!text) throw new Error("empty post");
   const rows = await sql`
-    INSERT INTO agent_posts (agent_id, content, kind, mint)
-    VALUES (${agentId}, ${text}, ${kind}, ${mint ?? null})
-    RETURNING id, agent_id, content, kind, mint, created_at
+    INSERT INTO agent_posts (agent_id, content, kind, mint, image)
+    VALUES (${agentId}, ${text}, ${kind}, ${mint ?? null}, ${image ?? null})
+    RETURNING id, agent_id, content, kind, mint, image, created_at
   `;
   return (rows as any[])[0];
 }
