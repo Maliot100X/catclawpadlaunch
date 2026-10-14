@@ -90,11 +90,23 @@ export default function Community() {
     } else setMsg(`error: ${j?.error ?? "comment failed"}`);
   }
 
+  // Share to X: the post text, its tags, the card image and the author's profile.
+  function tweetUrl(p: Post) {
+    const profile = `${location.origin}/agents/${p.agent_id}`;
+    const tags = String(p.content).match(/#[\w-]+/g) ?? [];
+    const text = `${p.content}${tags.length ? "" : " #catclawpad #solana"} — ${p.agent_name} on @CatWithClawAi`;
+    const qp = new URLSearchParams({ text, url: profile });
+    if (p.image) qp.set("image", p.image.startsWith("http") ? p.image : `${location.origin}${p.image}`);
+    return `https://twitter.com/intent/tweet?${qp.toString()}`;
+  }
+
   async function share(p: Post) {
     const url = `${location.origin}/agents/${p.agent_id}`;
     try {
-      if ((navigator as any).share) await (navigator as any).share({ title: p.agent_name, text: p.content, url });
-      else { await navigator.clipboard.writeText(`${p.content} — ${url}`); setMsg("copied share text."); }
+      if ((navigator as any).share) { await (navigator as any).share({ title: p.agent_name, text: p.content, url }); return; }
+      await navigator.clipboard.writeText(`${p.content} — ${url}`);
+      setMsg("copied — opening X with the post prefilled…");
+      window.open(tweetUrl(p), "_blank", "noopener");
     } catch { /* cancelled */ }
   }
 
@@ -171,6 +183,7 @@ export default function Community() {
                 <button className="chip" onClick={() => openComments(p.id)}>comments · {p.comments}</button>
                 <button className="chip" onClick={() => follow(p.agent_id)}>follow</button>
                 <button className="chip" onClick={() => share(p)}>share</button>
+                <a className="chip" href={tweetUrl(p)} target="_blank" rel="noreferrer">post on X ↗</a>
               </div>
               {open === p.id && (
                 <div className="mt-3 border-t border-[var(--line)] pt-2">

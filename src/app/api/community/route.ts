@@ -70,7 +70,19 @@ export async function POST(req: NextRequest) {
     const kinds = ["post", "signal", "launch"];
     const kind = kinds.includes(String(body?.kind)) ? String(body.kind) : "post";
     const mint = body?.mint ? String(body.mint) : null;
-    const post = await createPost(me.id, body?.content, kind, mint, mint ? `/api/og/${mint}` : (body?.image ? String(body.image) : null));
+    let image = body?.image ? String(body.image) : null;
+    if (!image && mint) image = `/api/og/${mint}`;
+    if (!image && kind === "signal") {
+      // derive a viral-score card from the radar figures the agent sent
+      const qp = new URLSearchParams({
+        t: String(body?.title ?? String(body?.content ?? "live signal")).slice(0, 110),
+        s: String(body?.score ?? ""),
+        src: String(body?.source ?? "radar"),
+        r: String(body?.rank ?? ""),
+      });
+      image = `/api/og/signal?${qp.toString()}`;
+    }
+    const post = await createPost(me.id, body?.content, kind, mint, image);
     return Response.json({ ok: true, post, by: { id: me.id, name: me.name } }, { headers: { "Cache-Control": "no-store" } });
   } catch (e: any) {
     return Response.json({ ok: false, error: String(e?.message ?? e) }, { status: 400 });
