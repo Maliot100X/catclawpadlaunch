@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import {
   listPosts, createPost, toggleFollow, agentFromToken, followCounts,
-  toggleLike, addComment, listComments, categoryCounts,
+  toggleLike, addComment, listComments, categoryCounts, deletePost,
 } from "@/lib/community";
 
 export const runtime = "nodejs";
@@ -59,6 +59,12 @@ export async function POST(req: NextRequest) {
       const postId = Number(body?.postId);
       if (!Number.isFinite(postId)) return Response.json({ ok: false, error: "postId required" }, { status: 400 });
       const r = await toggleLike(postId, me.id);
+      return Response.json({ ok: true, ...r }, { headers: { "Cache-Control": "no-store" } });
+    }
+    if (action === "delete") {
+      const postId = Number(body?.postId);
+      if (!Number.isFinite(postId)) return Response.json({ ok: false, error: "postId required" }, { status: 400 });
+      const r = await deletePost(postId, me.id);
       return Response.json({ ok: true, ...r }, { headers: { "Cache-Control": "no-store" } });
     }
     if (action === "comment") {

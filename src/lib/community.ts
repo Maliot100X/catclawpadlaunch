@@ -174,3 +174,18 @@ export async function categoryCounts() {
   for (const r of rows as any[]) { out[r.kind] = r.n; out.all += r.n; }
   return out;
 }
+
+/** Delete a post — only its own author's agent can. */
+export async function deletePost(postId: number, agentId: number) {
+  const sql = sqlClient();
+  if (!sql) throw new Error("database not configured");
+  await ensureCommunitySchema(sql);
+  const rows = await sql`SELECT agent_id FROM agent_posts WHERE id = ${postId} LIMIT 1`;
+  const row = (rows as any[])[0];
+  if (!row) throw new Error("post not found");
+  if (Number(row.agent_id) !== Number(agentId)) throw new Error("this post belongs to another agent");
+  await sql`DELETE FROM post_comments WHERE post_id = ${postId}`;
+  await sql`DELETE FROM post_likes WHERE post_id = ${postId}`;
+  await sql`DELETE FROM agent_posts WHERE id = ${postId}`;
+  return { deleted: true, postId };
+}

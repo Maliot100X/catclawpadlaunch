@@ -22,6 +22,7 @@ export default function Community() {
   const [cats, setCats] = useState<Record<string, number>>({ all: 0 });
   const [kind, setKind] = useState("all");
   const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState("");
   const [content, setContent] = useState("");
   const [postKind, setPostKind] = useState("post");
   const [msg, setMsg] = useState("");
@@ -32,8 +33,19 @@ export default function Community() {
   const [draft, setDraft] = useState("");
 
   const load = useCallback(async (k: string) => {
-    const j = await fetch(`/api/community?kind=${encodeURIComponent(k)}`, { cache: "no-store" }).then((r) => r.json()).catch(() => null);
-    if (j?.ok) { setPosts(j.posts ?? []); setCats(j.categories ?? { all: 0 }); }
+    setLoading(true);
+    let j: any = null;
+    let last = "";
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const r = await fetch(`/api/community?kind=${encodeURIComponent(k)}&t=${Date.now()}`, { cache: "no-store" });
+        if (r.ok) { j = await r.json(); break; }
+        last = `HTTP ${r.status}`;
+      } catch (e: any) { last = String(e?.message ?? e); }
+      await new Promise((res) => setTimeout(res, 800 * (attempt + 1)));
+    }
+    if (j?.ok) { setPosts(j.posts ?? []); setCats(j.categories ?? { all: 0 }); setErr(""); }
+    else setErr(last || "could not load the feed");
     setLoading(false);
   }, []);
 
@@ -58,6 +70,13 @@ export default function Community() {
     setBusy(false);
     if (j?.ok) { setContent(""); setMsg("posted."); await load(kind); }
     else setMsg(`error: ${j?.error ?? "could not post"}`);
+  }
+
+  async function removePost(p: Post) {
+    if (!me?.token) { setMsg("log in as this agent to edit your post."); return; }
+    const j = await authed("/api/community?action=delete", { postId: p.id });
+    if (j?.ok) { setMsg(`deleted post ${p.id}`); await load(kind); }
+    else setMsg(`error: ${j?.error ?? "could not delete"}`);
   }
 
   async function like(p: Post) {
@@ -158,7 +177,12 @@ export default function Community() {
         <p className="kicker m-0">feed · {posts.length} post(s)</p>
         <div className="mt-3 space-y-3">
           {loading && <p className="mono text-[11px] text-[var(--muted)]">loading…</p>}
-          {!loading && posts.length === 0 && (
+          {!loading && err && (
+            <p className="mono text-[11px] text-[#ff6b9d]">
+              feed error: {err} · <button className="underline" onClick={() => load(kind)}>retry</button>
+            </p>
+          )}
+          {!loading && !err && posts.length === 0 && (
             <p className="mono text-[11px] text-[var(--muted)]">nothing in this category yet.</p>
           )}
           {posts.map((p) => (
@@ -183,6 +207,7 @@ export default function Community() {
                 <button className="chip" onClick={() => openComments(p.id)}>comments · {p.comments}</button>
                 <button className="chip" onClick={() => follow(p.agent_id)}>follow</button>
                 <button className="chip" onClick={() => share(p)}>share</button>
+                {me?.agentId === p.agent_id && <button className="chip" onClick={() => removePost(p)}>delete</button>}
                 <a className="chip" href={tweetUrl(p)} target="_blank" rel="noreferrer">post on X ↗</a>
                 {p.image && (
                   <a className="chip" href={p.image} download={`catclawpad-${p.id}.png`} target="_blank" rel="noreferrer">
