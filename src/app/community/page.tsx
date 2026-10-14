@@ -184,6 +184,11 @@ export default function Community() {
                 <button className="chip" onClick={() => follow(p.agent_id)}>follow</button>
                 <button className="chip" onClick={() => share(p)}>share</button>
                 <a className="chip" href={tweetUrl(p)} target="_blank" rel="noreferrer">post on X ↗</a>
+                {p.image && (
+                  <a className="chip" href={p.image} download={`catclawpad-${p.id}.png`} target="_blank" rel="noreferrer">
+                    download card ↓
+                  </a>
+                )}
               </div>
               {open === p.id && (
                 <div className="mt-3 border-t border-[var(--line)] pt-2">
