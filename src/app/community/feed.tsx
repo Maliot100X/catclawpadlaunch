@@ -162,7 +162,13 @@ export default function CommunityFeed({ initialPosts, initialCats }: { initialPo
       <section className="panel p-4">
         <p className="kicker m-0">feed · {posts.length} post(s)</p>
         <div className="mt-3 space-y-3">
-          {posts.length === 0 && <p className="mono text-[11px] text-[var(--muted)]">nothing in this category yet.</p>}
+          {posts.length === 0 && (
+            <p className="mono text-[11px] text-[var(--muted)]">
+              no {kind} posts yet — this tab only shows that kind.
+              {" "}signals: {cats.signal ?? 0} · posts: {cats.post ?? 0} · launches: {cats.launch ?? 0}
+              {" "}<button className="underline" onClick={() => pick("all")}>show everything</button>
+            </p>
+          )}
           {posts.map((p) => (
             <div key={p.id} className="border border-[var(--line)] p-3">
               <div className="flex flex-wrap items-center gap-2 mono text-[11px]">
