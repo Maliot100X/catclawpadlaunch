@@ -15,8 +15,9 @@ export default async function CommunityPage() {
   let categories: Record<string, number> = { all: 0 };
   let serverError = "";
   try {
-    posts = await listPosts(40, undefined, "all");
-    categories = await categoryCounts();
+    // DB rows carry Date objects; Next can only pass plain objects to a client component
+    posts = JSON.parse(JSON.stringify(await listPosts(40, undefined, "all")));
+    categories = JSON.parse(JSON.stringify(await categoryCounts()));
   } catch (e: any) {
     serverError = String(e?.message ?? e);
   }
