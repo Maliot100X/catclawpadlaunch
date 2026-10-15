@@ -1,194 +1,240 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 
-const GRID = 20;
-const TICK_AGENT = 750; // LLM decides each move, so the loop is slower than a human's
-const TICK_HUMAN = 130;
+const W = 560, H = 420, CELL = 28;
 type Dir = "UP" | "DOWN" | "LEFT" | "RIGHT";
-const DELTA: Record<Dir, [number, number]> = { UP: [0, -1], DOWN: [0, 1], LEFT: [-1, 0], RIGHT: [1, 0] };
 
-type Agent = { id: number; name: string; status: string; budget_sol: number };
-
+/**
+ * A richer board than the first one, built on Phaser (installed per the repo's
+ * phaser-core skill): a live arena where the player hunts coins while enemies roam.
+ * In agent mode every steer is decided by our LLM — the arena maps its own state onto
+ * the game-brain API (player = the head, nearest coin = the target) so the same brain
+ * that trades also plays.
+ */
 export default function Game() {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [snake, setSnake] = useState<number[][]>([[10, 10], [9, 10], [8, 10]]);
-  const [food, setFood] = useState<number[]>([15, 10]);
-  const [dir, setDir] = useState<Dir>("RIGHT");
-  const [score, setScore] = useState(0);
-  const [best, setBest] = useState(0);
-  const [running, setRunning] = useState(false);
-  const [mode, setMode] = useState<"human" | "agent">("agent");
-  const [agents, setAgents] = useState<Agent[]>([]);
+  const host = useRef<HTMLDivElement | null>(null);
+  const gameRef = useRef<any>(null);
+  const bridge = useRef<{ setMode: (m: "agent" | "human") => void; restart: () => void; setAgent: (id: number | null) => void } | null>(null);
+  const [status, setStatus] = useState({ score: 0, lives: 3, coins: 0, reason: "", model: "" });
+  const [mode, setMode] = useState<"agent" | "human">("agent");
+  const [agents, setAgents] = useState<any[]>([]);
   const [agentId, setAgentId] = useState<number | null>(null);
-  const [reason, setReason] = useState("");
-  const [model, setModel] = useState("");
-  const [turns, setTurns] = useState(0);
-  const [dead, setDead] = useState(false);
-  const stateRef = useRef({ snake, food, dir, score });
-  stateRef.current = { snake, food, dir, score };
 
   useEffect(() => {
-    fetch("/api/agents", { cache: "no-store" }).then((r) => r.json())
-      .then((j) => {
-        const list = j?.agents ?? [];
-        setAgents(list);
-        if (list[0] && agentId == null) setAgentId(list[0].id);
-      })
-      .catch(() => {});
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const reset = useCallback(() => {
-    setSnake([[10, 10], [9, 10], [8, 10]]);
-    setFood([15, 10]);
-    setDir("RIGHT");
-    setScore(0);
-    setTurns(0);
-    setReason("");
-    setDead(false);
+    fetch("/api/agents", { cache: "no-store" }).then((r) => r.json()).then((j) => {
+      setAgents(j?.agents ?? []);
+      if (j?.agents?.[0]) setAgentId(j.agents[0].id);
+    }).catch(() => {});
   }, []);
 
-  const step = useCallback((nextDir: Dir) => {
-    const { snake: s, food: f } = stateRef.current;
-    const [dx, dy] = DELTA[nextDir];
-    const head = [s[0][0] + dx, s[0][1] + dy];
-    if (head[0] < 0 || head[1] < 0 || head[0] >= GRID || head[1] >= GRID) { setRunning(false); setDead(true); return; }
-    if (s.slice(0, -1).some(([x, y]) => x === head[0] && y === head[1])) { setRunning(false); setDead(true); return; }
-    const ate = head[0] === f[0] && head[1] === f[1];
-    const next = [head, ...s];
-    if (!ate) next.pop();
-    setSnake(next);
-    setDir(nextDir);
-    if (ate) {
-      setScore((v) => {
-        const nv = v + 1;
-        setBest((b) => Math.max(b, nv));
-        return nv;
-      });
-      let nf = [Math.floor(Math.random() * GRID), Math.floor(Math.random() * GRID)];
-      while (next.some(([x, y]) => x === nf[0] && y === nf[1])) nf = [Math.floor(Math.random() * GRID), Math.floor(Math.random() * GRID)];
-      setFood(nf);
-    }
-  }, []);
+  useEffect(() => {
+    if (!host.current || gameRef.current) return;
+    let disposed = false;
+    let game: any;
 
-  // the agent's turn: hand the board to our LLM and apply what it decides
-  const agentMove = useCallback(async () => {
-    const { snake: s, food: f, dir: d, score: sc } = stateRef.current;
-    const token = (() => { try { const raw = localStorage.getItem("clawpad_agent_session"); return raw ? JSON.parse(raw)?.token ?? "" : ""; } catch { return ""; } })();
-    try {
-      const r = await fetch("/api/game/play", {
-        method: "POST",
-        headers: { "content-type": "application/json", ...(token ? { authorization: "Bearer " + token } : {}) },
-        body: JSON.stringify({ snake: s, food: f, grid: GRID, score: sc, direction: d }),
-      });
-      const j = await r.json();
-      if (j?.ok && j.move) {
-        setReason(`${j.move} — ${j.reason ?? ""}`);
-        setModel(j.model ?? "");
-        setTurns((t) => t + 1);
-        step(j.move as Dir);
+    import("phaser").then((mod) => {
+      if (disposed || !host.current) return;
+      const Phaser = (mod as any).default ?? mod;
+
+      let agentMode: "agent" | "human" = "agent";
+      let asking = false;
+      let lastAsk = 0;
+
+      class Arena extends (Phaser.Scene as any) {
+        player: any; coins: any[] = []; enemies: any[] = [];
+        score = 0; lives = 3; dir: Dir = "RIGHT";
+        cursors: any; keys: any;
+        lastReason = ""; lastModel = "";
+
+        constructor() { super({ key: "arena" }); }
+
+        create() {
+          this.score = 0; this.lives = 3; this.coins = []; this.enemies = []; this.dir = "RIGHT";
+          this.add.rectangle(W / 2, H / 2, W, H, 0x04050c);
+          const g = this.add.graphics();
+          g.lineStyle(1, 0x1b2233, 1);
+          for (let x = 0; x <= W; x += CELL) { g.moveTo(x, 0); g.lineTo(x, H); }
+          for (let y = 0; y <= H; y += CELL) { g.moveTo(0, y); g.lineTo(W, y); }
+          g.strokePath();
+
+          this.physics.world.setBounds(0, 0, W, H);
+          this.player = this.add.circle(W / 2, H / 2, CELL / 2 - 2, 0x9bff5e);
+          this.physics.add.existing(this.player);
+          this.player.body.setCircle(CELL / 2 - 2);
+          this.player.body.setCollideWorldBounds(true);
+
+          for (let i = 0; i < 5; i++) this.spawnCoin();
+          for (let i = 0; i < 3; i++) {
+            const e = this.add.circle(80 + i * 150, 80 + i * 90, CELL / 2 - 3, 0xff6b9d);
+            this.physics.add.existing(e);
+            e.body.setCircle(CELL / 2 - 3);
+            e.body.setCollideWorldBounds(true);
+            e.body.setBounce(1);
+            e.speed = 70 + i * 25;
+            this.enemies.push(e);
+          }
+          this.cursors = this.input.keyboard.createCursorKeys();
+          this.keys = this.input.keyboard.addKeys("W,A,S,D");
+
+          this.physics.add.overlap(this.player, this.coins, (_p: any, c: any) => {
+            c.destroy();
+            this.coins = this.coins.filter((x: any) => x.active);
+            this.score++;
+            this.spawnCoin();
+            this.report();
+          });
+          this.enemies.forEach((e: any) => {
+            this.physics.add.overlap(this.player, e, () => {
+              this.lives--;
+              if (this.lives <= 0) {
+                this.physics.pause();
+                this.report();
+              } else {
+                this.player.setPosition(W / 2, H / 2);
+              }
+              this.report();
+            });
+          });
+          this.report();
+        }
+
+        spawnCoin() {
+          const c = this.add.circle(40 + Math.random() * (W - 80), 40 + Math.random() * (H - 80), 7, 0xffd24a);
+          this.physics.add.existing(c);
+          c.body.setCircle(7);
+          this.coins.push(c);
+          return c;
+        }
+
+        report() {
+          setStatus({
+            score: this.score, lives: Math.max(0, this.lives), coins: this.coins.length,
+            reason: this.lastReason, model: this.lastModel,
+          });
+        }
+
+        async askBrain() {
+          const px = Math.round(this.player.x / CELL), py = Math.round(this.player.y / CELL);
+          const grid = Math.round(W / CELL);
+          let near: number[] = [grid / 2, grid / 2];
+          let bd = Infinity;
+          for (const c of this.coins) {
+            const cx = Math.round(c.x / CELL), cy = Math.round(c.y / CELL);
+            const d = Math.abs(cx - px) + Math.abs(cy - py);
+            if (d < bd) { bd = d; near = [cx, cy]; }
+          }
+          const token = (() => { try { const r = localStorage.getItem("clawpad_agent_session"); return r ? (JSON.parse(r)?.token ?? "") : ""; } catch { return ""; } })();
+          try {
+            const r = await fetch("/api/game/play", {
+              method: "POST",
+              headers: { "content-type": "application/json", ...(token ? { authorization: "Bearer " + token } : {}) },
+              body: JSON.stringify({ snake: [[px, py], [px - 1, py], [px - 2, py]], food: near, grid, score: this.score, direction: this.dir }),
+            });
+            const j = await r.json();
+            if (j?.ok && j.move) {
+              this.dir = j.move as Dir;
+              this.lastReason = j.reason ?? "";
+              this.lastModel = j.model ?? "";
+              this.report();
+            }
+          } catch { /* keep playing */ }
+        }
+
+        update(time: number) {
+          const sp = 170;
+          let vx = 0, vy = 0;
+          if (agentMode === "human") {
+            const L = this.cursors.left.isDown || this.keys.A.isDown;
+            const R = this.cursors.right.isDown || this.keys.D.isDown;
+            const U = this.cursors.up.isDown || this.keys.W.isDown;
+            const D = this.cursors.down.isDown || this.keys.S.isDown;
+            if (L) { vx = -sp; this.dir = "LEFT"; } else if (R) { vx = sp; this.dir = "RIGHT"; }
+            if (U) { vy = -sp; this.dir = "UP"; } else if (D) { vy = sp; this.dir = "DOWN"; }
+          } else {
+            if (!asking && time - lastAsk > 420) {
+              asking = true;
+              lastAsk = time;
+              this.askBrain().finally(() => { asking = false; });
+            }
+            if (this.dir === "UP") vy = -sp;
+            else if (this.dir === "DOWN") vy = sp;
+            else if (this.dir === "LEFT") vx = -sp;
+            else vx = sp;
+          }
+          this.player.body.setVelocity(vx, vy);
+
+          for (const e of this.enemies) {
+            const v = e.body.velocity;
+            if (!v.x && !v.y) {
+              const a = Math.random() * Math.PI * 2;
+              e.body.setVelocity(Math.cos(a) * e.speed, Math.sin(a) * e.speed);
+            }
+            if (e.x < 20 || e.x > W - 20) e.body.setVelocityX(-e.body.velocity.x);
+            if (e.y < 20 || e.y > H - 20) e.body.setVelocityY(-e.body.velocity.y);
+          }
+        }
+
+        restartArena() { this.scene.restart(); }
+        setAgentMode(m: "agent" | "human") { agentMode = m; }
       }
-    } catch { /* keep the game alive on a network hiccup */ }
-  }, [step]);
 
-  // loops
-  useEffect(() => {
-    if (!running) return;
-    if (mode === "human") {
-      const id = setInterval(() => step(stateRef.current.dir), TICK_HUMAN);
-      return () => clearInterval(id);
-    }
-    let stop = false;
-    const loop = async () => {
-      while (!stop) {
-        await agentMove();
-        await new Promise((r) => setTimeout(r, TICK_AGENT));
-      }
-    };
-    loop();
-    return () => { stop = true; };
-  }, [running, mode, step, agentMove]);
+      game = new Phaser.Game({
+        type: Phaser.AUTO,
+        width: W, height: H,
+        parent: host.current,
+        backgroundColor: "#04050c",
+        physics: { default: "arcade", arcade: { gravity: { y: 0 }, debug: false } },
+        scene: [Arena],
+      });
+      gameRef.current = game;
 
-  // human controls
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (!running || mode !== "human") return;
-      const map: Record<string, Dir> = { ArrowUp: "UP", ArrowDown: "DOWN", ArrowLeft: "LEFT", ArrowRight: "RIGHT", w: "UP", s: "DOWN", a: "LEFT", d: "RIGHT" };
-      const nd = map[e.key];
-      if (!nd) return;
-      e.preventDefault();
-      const d = stateRef.current.dir;
-      const bad = (d === "UP" && nd === "DOWN") || (d === "DOWN" && nd === "UP") || (d === "LEFT" && nd === "RIGHT") || (d === "RIGHT" && nd === "LEFT");
-      if (!bad) { stateRef.current.dir = nd; setDir(nd); }
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [running, mode]);
-
-  // draw
-  useEffect(() => {
-    const c = canvasRef.current;
-    if (!c) return;
-    const ctx = c.getContext("2d");
-    if (!ctx) return;
-    const size = c.width / GRID;
-    ctx.fillStyle = "#04050c";
-    ctx.fillRect(0, 0, c.width, c.height);
-    ctx.strokeStyle = "rgba(255,255,255,0.04)";
-    for (let i = 0; i <= GRID; i++) {
-      ctx.beginPath(); ctx.moveTo(i * size, 0); ctx.lineTo(i * size, c.height); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(0, i * size); ctx.lineTo(c.width, i * size); ctx.stroke();
-    }
-    ctx.fillStyle = "#ff6b9d";
-    ctx.fillRect(food[0] * size + 2, food[1] * size + 2, size - 4, size - 4);
-    snake.forEach(([x, y], i) => {
-      ctx.fillStyle = i === 0 ? "#9bff5e" : "#4fbf3f";
-      ctx.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
+      const wire = () => {
+        const sc = game.scene.getScene("arena");
+        if (!sc) return false;
+        bridge.current = {
+          setMode: (m) => sc.setAgentMode(m),
+          restart: () => sc.restartArena(),
+          setAgent: () => {},
+        };
+        return true;
+      };
+      if (!wire()) setTimeout(wire, 400);
     });
-  }, [snake, food]);
 
-  const playing = agents.find((a) => a.id === agentId);
+    return () => {
+      disposed = true;
+      try { gameRef.current?.destroy(true); } catch { /* ignore */ }
+      gameRef.current = null;
+      bridge.current = null;
+    };
+  }, []);
+
+  useEffect(() => { bridge.current?.setMode(mode); }, [mode]);
 
   return (
     <div className="shell space-y-4 py-4">
       <section className="panel p-4">
-        <p className="kicker m-0">game · agents play live</p>
+        <p className="kicker m-0">arena · agents play live (phaser)</p>
         <p className="mono text-[11px] text-[var(--muted)] mt-1">
-          the board is real; every move in agent mode is decided by our LLM brain. Humans can play too.
+          collect the coins, dodge the pink roamers. in agent mode every steer is decided by our LLM brain.
         </p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <button className={mode === "agent" ? "chip chip-on" : "chip"} onClick={() => { setMode("agent"); setRunning(false); reset(); }}>agent plays</button>
-          <button className={mode === "human" ? "chip chip-on" : "chip"} onClick={() => { setMode("human"); setRunning(false); reset(); }}>i play</button>
-          <select
-            value={agentId ?? ""}
-            onChange={(e) => setAgentId(Number(e.target.value))}
-            className="bg-[#04050c] border border-[var(--line)] p-1 mono text-[11px]"
-          >
+          <button className={mode === "agent" ? "chip chip-on" : "chip"} onClick={() => setMode("agent")}>agent plays</button>
+          <button className={mode === "human" ? "chip chip-on" : "chip"} onClick={() => setMode("human")}>i play</button>
+          <select value={agentId ?? ""} onChange={(e) => setAgentId(Number(e.target.value))}
+                  className="bg-[#04050c] border border-[var(--line)] p-1 mono text-[11px]">
             {agents.map((a) => <option key={a.id} value={a.id}>agent {a.id} · {a.name}</option>)}
           </select>
-          <button className="chip chip-on" onClick={() => { if (dead) reset(); setRunning((v) => !v); }}>
-            {running ? "pause" : dead ? "restart" : "play"}
-          </button>
-          <button className="chip" onClick={() => { setRunning(false); reset(); }}>reset</button>
+          <button className="chip chip-on" onClick={() => bridge.current?.restart()}>restart</button>
         </div>
         <p className="mono text-[11px] text-[var(--muted)] mt-2">
-          score {score} · best {best} · moves {turns} {model ? `· brain ${model}` : ""}
-          {playing ? ` · playing as ${playing.name}` : ""}
+          coins {status.score} · lives {status.lives} · on board {status.coins}{status.model ? ` · brain ${status.model}` : ""}
         </p>
-        {mode === "agent" && reason && <p className="mono text-[11px] text-[var(--cyan)] mt-1">brain: {reason}</p>}
-        {dead && <p className="mono text-[11px] text-[#ff6b9d] mt-1">crashed — score {score}. press restart.</p>}
+        {mode === "agent" && status.reason && <p className="mono text-[11px] text-[var(--cyan)] mt-1">brain: {status.reason}</p>}
       </section>
-
       <section className="panel p-4">
-        <canvas ref={canvasRef} width={520} height={520}
-                className="w-full max-w-[520px] border border-[var(--line)]" />
-        {mode === "human" && (
-          <p className="mono text-[10px] text-[var(--muted)] mt-2">arrow keys or wasd</p>
-        )}
-        <p className="mono text-[10px] text-[var(--muted)] mt-2">
-          agents play headless too: POST /api/game/play with the board and your agent token ·{" "}
-          <Link className="text-[var(--cyan)]" href="/agents">see the leaderboard →</Link>
-        </p>
+        <div ref={host} className="w-full max-w-[560px]" />
+        {mode === "human" && <p className="mono text-[10px] text-[var(--muted)] mt-2">arrow keys or wasd</p>}
       </section>
     </div>
   );
