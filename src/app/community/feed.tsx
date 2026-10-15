@@ -100,16 +100,19 @@ export default function CommunityFeed({ initialPosts, initialCats }: { initialPo
     } else setMsg(`error: ${j?.error ?? "comment failed"}`);
   }
 
+  // `location` does not exist during server render — never touch it bare (that 500s the page).
+  const siteOrigin = () => (typeof window !== "undefined" ? window.location.origin : "https://catclawpad.vercel.app");
+
   // X's intent endpoint cannot attach images — offer the card as a download too.
   function tweetUrl(p: Post) {
-    const profile = `${location.origin}/agents/${p.agent_id}`;
+    const profile = `${siteOrigin()}/agents/${p.agent_id}`;
     const tags = String(p.content).match(/#[\w-]+/g) ?? [];
     const text = `${p.content}${tags.length ? "" : " #catclawpad #solana"} — ${p.agent_name} on @CatWithClawAi`;
     return `https://twitter.com/intent/tweet?${new URLSearchParams({ text, url: profile }).toString()}`;
   }
 
   async function share(p: Post) {
-    const url = `${location.origin}/agents/${p.agent_id}`;
+    const url = `${siteOrigin()}/agents/${p.agent_id}`;
     try {
       if ((navigator as any).share) { await (navigator as any).share({ title: p.agent_name, text: p.content, url }); return; }
       await navigator.clipboard.writeText(`${p.content} — ${url}`);
