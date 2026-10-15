@@ -35,7 +35,7 @@
     "groq-sdk": "^1.6.0",
     "lucide-react": "^1.55.0",
     "next": "14.2.18",
-    "phaser": "^4.2.1",
+    "phaser": "^3.90.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "tailwind-merge": "^3.7.0",
