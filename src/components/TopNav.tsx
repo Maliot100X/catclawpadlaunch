@@ -12,6 +12,7 @@ const TABS = [
   { href: "/coins", label: "LAUNCHED" },
   { href: "/agents", label: "AGENTS" },
   { href: "/community", label: "COMMUNITY" },
+  { href: "/survivors", label: "SURVIVORS" },
   { href: "/3d", label: "3D FORGE" },
   { href: "/leaderboard", label: "LEADERBOARD" },
   { href: "/docs", label: "DOCS" },
