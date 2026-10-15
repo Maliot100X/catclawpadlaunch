@@ -45,6 +45,7 @@ export default function Game() {
         score = 0; lives = 3; dir: Dir = "RIGHT";
         cursors: any; keys: any;
         lastReason = ""; lastModel = "";
+        invuln = false;
 
         constructor() { super({ key: "arena" }); }
 
@@ -85,13 +86,17 @@ export default function Game() {
           });
           this.enemies.forEach((e: any) => {
             this.physics.add.overlap(this.player, e, () => {
+              if (this.invuln) return;          // i-frames: one contact costs exactly one life
+              this.invuln = true;
               this.lives--;
               if (this.lives <= 0) {
                 this.physics.pause();
                 this.report();
-              } else {
-                this.player.setPosition(W / 2, H / 2);
+                return;
               }
+              this.player.setPosition(W / 2, H / 2);
+              this.player.setAlpha(0.35);
+              this.time.delayedCall(1400, () => { this.invuln = false; this.player.setAlpha(1); });
               this.report();
             });
           });
@@ -151,7 +156,7 @@ export default function Game() {
             if (L) { vx = -sp; this.dir = "LEFT"; } else if (R) { vx = sp; this.dir = "RIGHT"; }
             if (U) { vy = -sp; this.dir = "UP"; } else if (D) { vy = sp; this.dir = "DOWN"; }
           } else {
-            if (!asking && time - lastAsk > 420) {
+            if (!asking && time - lastAsk > 900) {
               asking = true;
               lastAsk = time;
               this.askBrain().finally(() => { asking = false; });

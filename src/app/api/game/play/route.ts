@@ -65,6 +65,7 @@ export async function POST(req: NextRequest) {
   const model = process.env.FORGE_BRAIN_MODEL || "deepseek-ai/DeepSeek-V4.1-Flash";
   const key = who?.apiKey || process.env.RIVER_API_KEY || process.env.HERMES_CUSTOM_API_RIVER_AI_API_KEY;
 
+  let llmNote = "";
   if (key) {
     const prompt =
       `You are playing snake on a ${grid}x${grid} grid. Board reading:\n` +
@@ -101,10 +102,25 @@ export async function POST(req: NextRequest) {
     } catch { /* fall through to the deterministic safe move */ }
   }
 
-  // No key / no usable answer: play safe rather than crash the game.
-  const fallback = safe[0] ?? legal[0] ?? "RIGHT";
+  // No usable model answer: still play well — pick the safe move that gets closest to the food.
+  const pool = safe.length ? safe : legal;
+  let best = pool[0] ?? "RIGHT";
+  let bestD = Infinity;
+  for (const d of pool) {
+    const [dx, dy] = deltas[d];
+    const d2 = Math.abs(head[0] + dx - food[0]) + Math.abs(head[1] + dy - food[1]);
+    if (d2 < bestD) { bestD = d2; best = d; }
+  }
   return Response.json(
-    { ok: true, move: fallback, reason: key ? "fallback: model unavailable, chose a safe move" : "fallback: no LLM key, chose a safe move", model: key ? model : "fallback", agent: who ?? null },
+    {
+      ok: true,
+      move: best,
+      reason: key
+        ? `fallback (${llmNote || "model gave no usable move"}) — greedy safe step toward food`
+        : "fallback — no LLM key on this request, greedy safe step toward food",
+      model: key ? model : "fallback",
+      agent: who ?? null,
+    },
     { headers: { "Cache-Control": "no-store" } }
   );
 }
